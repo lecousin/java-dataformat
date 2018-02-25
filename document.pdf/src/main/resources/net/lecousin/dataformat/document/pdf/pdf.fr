@@ -1,0 +1,10 @@
+author=auteur
+creator=créateur
+encrypted=crypté
+title=titre
+page=page
+pages=pages
+producer=producteur
+subject=sujet
+
+extract page from pdf into image=extrait une page d'un PDF vers une image

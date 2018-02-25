@@ -1,0 +1,84 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>net.lecousin.dataformat</groupId>
+  <artifactId>parent-pom</artifactId>
+  <version>0.2.0</version>
+  <packaging>pom</packaging>
+  <parent>
+  	<groupId>net.lecousin</groupId>
+  	<artifactId>parent-pom</artifactId>
+  	<version>0.7</version>
+  </parent>
+  <modules>
+    <module>core</module>
+    <module>archive</module>
+    <module>archive.cab</module>
+    <module>archive.cfb</module>
+    <module>archive.coff</module>
+    <module>archive.rar</module>
+    <module>archive.tar</module>
+    <module>archive.zip</module>
+    <module>document</module>
+    <module>document.office</module>
+    <module>document.openoffice</module>
+    <module>document.pdf</module>
+    <module>executable.unix</module>
+    <module>executable.windows</module>
+    <module>image</module>
+    <module>image.bmp</module>
+    <module>image.ico</module>
+    <module>image.jpeg</module>
+    <module>image.png</module>
+    <module>microsoft</module>
+    <module>security</module>
+    <module>text</module>
+  </modules>
+  
+  <licenses>
+    <license>
+      <name>Apache 2.0</name>
+      <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+    
+  <developers>
+    <developer>
+    	<id>lecousin</id>
+    	<name>Guillaume Le Cousin</name>
+    </developer>
+  </developers>
+
+  <build>
+    <plugins>
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <configuration>
+          <source>1.8</source>
+          <target>1.8</target>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+  
+  <dependencyManagement>
+  	<dependencies>
+	  	<dependency>
+	  		<groupId>net.lecousin</groupId>
+	  		<artifactId>core</artifactId>
+	  		<version>0.10.0</version>
+	  	</dependency>
+	  	<dependency>
+	  		<groupId>net.lecousin.framework</groupId>
+	  		<artifactId>ui-description</artifactId>
+	  		<version>0.1.0</version>
+	  	</dependency>
+	  	<dependency>
+	  		<groupId>commons-logging</groupId>
+	  		<artifactId>commons-logging</artifactId>
+	  		<version>1.2</version>
+	  	</dependency>
+  	</dependencies>
+  </dependencyManagement>
+  
+</project>

@@ -1,0 +1,2 @@
+net.lecousin.dataformat.core.DataFormatExtensionPoint:net.lecousin.dataformat.text.TextDataFormatPlugin
+net.lecousin.dataformat.text.TextSpecializationDetectorWithFirstLines$ExtensionPoint:net.lecousin.dataformat.text.DelimiterSeparatedValueDetector

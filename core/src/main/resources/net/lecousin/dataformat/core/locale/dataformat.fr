@@ -1,0 +1,4 @@
+empty=vide
+directory=répertoire
+file type=type de fichier
+unknown=inconnu

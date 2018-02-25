@@ -1,0 +1,12 @@
+bicubic=bicubique
+bilinear=bilinéaire
+comment=commentaire
+fixed size=taille fixe
+height=hauteur
+image=image
+interpolation=interpolation
+nearest=plus proche
+rescale=redimensionner
+rescale type=type de redimensionnement
+scale factor=facteur
+width=largeur

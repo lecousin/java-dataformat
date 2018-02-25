@@ -1,0 +1,12 @@
+bicubic=bicubic
+bilinear=bilinear
+comment=comment
+fixed size=fixed size
+height=height
+image=image
+interpolation=interpolation
+nearest=nearest
+rescale=rescale
+rescale type=rescale type
+scale factor=scale factor
+width=width
