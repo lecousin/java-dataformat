@@ -4,7 +4,7 @@ import java.lang.reflect.Field;
 
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.annotations.render.Renderer;
+import net.lecousin.framework.uidescription.annotations.render.Renderer;
 
 public class GUIDRenderer implements Renderer {
 

@@ -2,7 +2,7 @@ package net.lecousin.dataformat.core.operations;
 
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 /**
  * Base interface for operations.

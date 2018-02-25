@@ -9,7 +9,7 @@ import net.lecousin.framework.io.IOAsInputStream;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 import org.apache.poi.xwpf.usermodel.XWPFDocument;
 

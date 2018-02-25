@@ -21,7 +21,7 @@ import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 	

@@ -8,9 +8,9 @@ import net.lecousin.dataformat.microsoft.GUIDRenderer;
 import net.lecousin.framework.collections.LinkedArrayList;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.properties.PropertiesContainer;
-import net.lecousin.framework.ui_description.annotations.name.FixedName;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
-import net.lecousin.framework.ui_description.annotations.render.Render;
+import net.lecousin.framework.uidescription.annotations.name.FixedName;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.render.Render;
 import net.lecousin.framework.util.Pair;
 
 public class OLEPropertySets implements DataFormatInfo, PropertiesContainer {

@@ -9,7 +9,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
 
 public class DIBInfo extends ImageDataFormatInfo {
 

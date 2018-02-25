@@ -2,10 +2,10 @@ package net.lecousin.dataformat.core;
 
 import net.lecousin.framework.geometry.HorizontalAlignment;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
-import net.lecousin.framework.ui_description.annotations.render.Render;
-import net.lecousin.framework.ui_description.annotations.render.RendererSize;
-import net.lecousin.framework.ui_description.annotations.render.TextAlign;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.render.Render;
+import net.lecousin.framework.uidescription.annotations.render.RendererSize;
+import net.lecousin.framework.uidescription.annotations.render.TextAlign;
 
 public class DataCommonProperties {
 

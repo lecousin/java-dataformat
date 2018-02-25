@@ -19,7 +19,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class ExcelFile_CFB extends CFBDataFormat {
 

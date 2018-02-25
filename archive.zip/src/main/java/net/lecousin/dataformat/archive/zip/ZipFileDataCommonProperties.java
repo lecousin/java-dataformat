@@ -1,9 +1,9 @@
 package net.lecousin.dataformat.archive.zip;
 
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
-import net.lecousin.framework.ui_description.annotations.render.Render;
-import net.lecousin.framework.ui_description.annotations.render.RendererTimestamp;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.render.Render;
+import net.lecousin.framework.uidescription.annotations.render.RendererTimestamp;
 
 public class ZipFileDataCommonProperties extends DataCommonProperties {
 

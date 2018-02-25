@@ -17,7 +17,7 @@ import net.lecousin.dataformat.executable.windows.pe.PEDataFormat;
 import net.lecousin.dataformat.executable.windows.pe.PEDetector;
 import net.lecousin.dataformat.executable.windows.versioninfo.VersionInfoDataFormat;
 import net.lecousin.dataformat.executable.windows.versioninfo.VersionInfoDetector;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class WinExeDataFormatPlugin implements DataFormatPlugin {
 

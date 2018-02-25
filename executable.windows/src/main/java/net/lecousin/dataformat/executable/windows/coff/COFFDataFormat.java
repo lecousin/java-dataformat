@@ -29,7 +29,7 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.StringUtil;
 

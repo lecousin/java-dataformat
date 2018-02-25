@@ -15,7 +15,7 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 
 public class BMPReaderOp implements DataFormatReadOperation.OneToOne<BMPDataFormat, BufferedImage, Object> {

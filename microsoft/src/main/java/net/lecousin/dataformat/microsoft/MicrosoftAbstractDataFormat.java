@@ -1,7 +1,7 @@
 package net.lecousin.dataformat.microsoft;
 
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public abstract class MicrosoftAbstractDataFormat implements DataFormat {
 

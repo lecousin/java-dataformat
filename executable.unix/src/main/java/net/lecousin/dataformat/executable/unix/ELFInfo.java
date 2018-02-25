@@ -1,7 +1,7 @@
 package net.lecousin.dataformat.executable.unix;
 
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.framework.ui_description.annotations.name.FixedName;
+import net.lecousin.framework.uidescription.annotations.name.FixedName;
 
 public class ELFInfo implements DataFormatInfo {
 

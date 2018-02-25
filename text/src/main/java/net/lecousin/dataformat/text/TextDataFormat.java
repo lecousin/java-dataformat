@@ -7,7 +7,7 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class TextDataFormat implements DataFormat {
 

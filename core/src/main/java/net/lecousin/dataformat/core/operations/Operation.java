@@ -4,7 +4,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.mutable.MutableBoolean;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.Provider;
 

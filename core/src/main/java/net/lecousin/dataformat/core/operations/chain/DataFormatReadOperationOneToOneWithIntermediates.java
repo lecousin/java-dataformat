@@ -10,7 +10,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
 import net.lecousin.framework.locale.CompositeLocalizable;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.CompositeNamedObject;
 import net.lecousin.framework.util.Pair;
 

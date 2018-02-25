@@ -17,7 +17,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class VersionInfoDataFormat implements DataFormat {
 

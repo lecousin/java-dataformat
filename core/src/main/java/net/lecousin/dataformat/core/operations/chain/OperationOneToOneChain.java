@@ -13,7 +13,7 @@ import net.lecousin.framework.mutable.Mutable;
 import net.lecousin.framework.mutable.MutableInteger;
 import net.lecousin.framework.mutable.MutableLong;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.CompositeNamedObject;
 import net.lecousin.framework.util.Pair;
 

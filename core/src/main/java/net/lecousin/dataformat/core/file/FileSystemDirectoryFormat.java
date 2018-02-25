@@ -22,7 +22,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.provider.IOProvider;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 
 public class FileSystemDirectoryFormat implements DataFormat.DataContainerFlat {

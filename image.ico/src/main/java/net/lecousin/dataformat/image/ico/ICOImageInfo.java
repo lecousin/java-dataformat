@@ -2,7 +2,7 @@ package net.lecousin.dataformat.image.ico;
 
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.image.ImageDataFormatInfo;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
 
 public class ICOImageInfo {
 

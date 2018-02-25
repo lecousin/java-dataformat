@@ -3,7 +3,7 @@ package net.lecousin.dataformat.document.openoffice;
 import net.lecousin.dataformat.archive.zip.ZipDataFormat;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class OpenDocumentImageDataFormat extends ZipDataFormat {
 

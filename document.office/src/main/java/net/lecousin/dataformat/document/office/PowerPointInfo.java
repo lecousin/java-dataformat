@@ -1,7 +1,7 @@
 package net.lecousin.dataformat.document.office;
 
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
 
 public class PowerPointInfo implements DataFormatInfo {
 

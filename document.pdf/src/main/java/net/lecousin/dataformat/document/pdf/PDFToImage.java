@@ -11,9 +11,9 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.annotations.constraints.IntegerMinimum;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.annotations.constraints.IntegerMinimum;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 
 import org.apache.pdfbox.pdmodel.PDDocument;

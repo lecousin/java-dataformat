@@ -5,7 +5,7 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.LocalizableString;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class EmptyDataFormat implements DataFormat {
 

@@ -12,11 +12,11 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui_description.annotations.constraints.DecimalGreaterThan;
-import net.lecousin.framework.ui_description.annotations.constraints.IntegerMinimum;
-import net.lecousin.framework.ui_description.annotations.constraints.OnlyIfEnum;
-import net.lecousin.framework.ui_description.annotations.name.LocalizedName;
-import net.lecousin.framework.ui_description.resources.IconProvider;
+import net.lecousin.framework.uidescription.annotations.constraints.DecimalGreaterThan;
+import net.lecousin.framework.uidescription.annotations.constraints.IntegerMinimum;
+import net.lecousin.framework.uidescription.annotations.constraints.OnlyIfEnum;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 
 public class ScaleImage implements TypeOperation<BufferedImage, ScaleImage.Parameters> {
