@@ -69,7 +69,7 @@ public class ZipDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 				public void run() {
 					// TODO better progress
 					if (progress != null) progress.progress(work);
-					if (sp.hasError()) result.error(sp.getError());
+					if (sp.hasError()) result.error(new Exception("Unable to read ZIP file " + io.getSourceDescription(), sp.getError()));
 					else if (sp.isCancelled()) result.cancel(sp.getCancelEvent());
 					else result.unblockSuccess(zip);
 				}

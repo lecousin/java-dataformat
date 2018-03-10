@@ -77,10 +77,20 @@ class ZipArchiveExtractor {
 			}
 			reverse_io.stop();
 			zip_io.seekAsync(SeekType.FROM_BEGINNING, zip.endOfCentralDirectory.centralDirectoryOffset).listenInline(new Runnable() {
+				@SuppressWarnings("resource")
 				@Override
 				public void run() {
-					@SuppressWarnings("resource")
-					PreBufferedReadable io_buf = new PreBufferedReadable(zip_io, 1024, getPriority(), 8192, getPriority(), 8);
+					PreBufferedReadable io_buf;
+					if (zip_io instanceof IO.KnownSize) {
+						try {
+							long size = ((IO.KnownSize)zip_io).getSizeSync();
+							io_buf = new PreBufferedReadable(zip_io, size - zip.endOfCentralDirectory.centralDirectoryOffset, 1024, getPriority(), 8192, getPriority(), 8);
+						} catch (IOException e) {
+							done.unblockError(e);
+							return;
+						}
+					} else
+						io_buf = new PreBufferedReadable(zip_io, 1024, getPriority(), 8192, getPriority(), 8);
 					io_buf.canStartReading().listenAsync(new Task.Cpu<Void,NoException>("Reading Zip End of Central Directory: "+zip.io.getSourceDescription(), zip.io.getPriority()) {
 						@Override
 						public Void run() {
