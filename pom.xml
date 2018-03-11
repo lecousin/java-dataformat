@@ -32,6 +32,7 @@
     <module>microsoft</module>
     <module>security</module>
     <module>text</module>
+    <module>vm.vbox</module>
   </modules>
   
   <licenses>

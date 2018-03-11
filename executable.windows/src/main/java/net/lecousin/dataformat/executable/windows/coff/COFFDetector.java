@@ -66,6 +66,8 @@ public class COFFDetector implements DataFormatDetector.MoreThanHeaderNeeded {
 						return new AsyncWork<DataFormat,NoException>(null, null);
 				sections.add(range);
 			}
+			if (size == 0 && start == 0 && DataUtil.readLongLittleEndian(header, (int)pos) == 0)
+				return new AsyncWork<DataFormat,NoException>(null, null);
 			pos += 40;
 		}
 		data.setProperty("COFFOffset", new Long(0));
@@ -105,6 +107,10 @@ public class COFFDetector implements DataFormatDetector.MoreThanHeaderNeeded {
 							return null;
 						}
 					sections.add(range);
+				}
+				if (size == 0 && start == 0 && DataUtil.readLongLittleEndian(buf, 0) == 0) {
+					result.unblockSuccess(null);
+					return null;
 				}
 				asyncDetect(data, io, pos+40, sectionIndex+1, nb_sections, dataSize, sections, buf, buffer, result);
 				return null;
