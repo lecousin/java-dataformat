@@ -10,12 +10,12 @@ public class VirtualBoxPlugin implements DataFormatPlugin {
 
 	@Override
 	public DataFormat[] getFormats() {
-		return new DataFormat[] { VDIDataFormat.instance };
+		return new DataFormat[] { VDIDataFormat.instance, SAVDataFormat.instance };
 	}
 
 	@Override
 	public DataFormatDetector[] getDetectors() {
-		return new DataFormatDetector[] { new VDIDetector() };
+		return new DataFormatDetector[] { new VDIDetector(), new SAVDetector() };
 	}
 
 	@Override
