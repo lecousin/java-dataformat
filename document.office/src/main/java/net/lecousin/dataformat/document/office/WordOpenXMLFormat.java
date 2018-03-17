@@ -2,6 +2,7 @@ package net.lecousin.dataformat.document.office;
 
 import java.io.InputStream;
 
+import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
@@ -44,7 +45,7 @@ public class WordOpenXMLFormat extends OpenXMLFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<XWPFDocument,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<XWPFDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			InputStream is = IOAsInputStream.get(io);
 			try { return new AsyncWork<>(new XWPFDocument(is), null); }
 			catch (Exception e) { return new AsyncWork<>(null, e); }

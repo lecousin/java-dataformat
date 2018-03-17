@@ -59,7 +59,7 @@ public class TarDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<TarFile,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<TarFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			TarFile tar = new TarFile((IO.Readable.Seekable)io, progress, work);
 			ISynchronizationPoint<IOException> sp = tar.getSynchOnReady();
 			AsyncWork<TarFile,Exception> result = new AsyncWork<>();

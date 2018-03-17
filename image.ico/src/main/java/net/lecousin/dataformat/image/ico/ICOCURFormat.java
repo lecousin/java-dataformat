@@ -108,7 +108,7 @@ public abstract class ICOCURFormat extends ImageDataFormat.Multiple {
 	public static OpenedDataCache<ImageDirectory> cache = new OpenedDataCache<ImageDirectory>(ImageDirectory.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<ImageDirectory,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<ImageDirectory,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			Task.Cpu<ImageDirectory, Exception> task = new Task.Cpu<ImageDirectory, Exception>("Read icon directory", Task.PRIORITY_NORMAL) {
 				@Override
 				public ImageDirectory run() throws Exception {

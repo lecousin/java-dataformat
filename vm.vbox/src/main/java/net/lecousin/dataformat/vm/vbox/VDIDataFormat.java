@@ -58,7 +58,7 @@ public class VDIDataFormat implements DataFormat.DataContainerFlat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<VirtualBoxDiskImage, Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<VirtualBoxDiskImage, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			AsyncWork<VirtualBoxDiskImage, Exception> result = new AsyncWork<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)

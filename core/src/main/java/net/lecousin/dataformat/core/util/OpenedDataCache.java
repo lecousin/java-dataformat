@@ -21,7 +21,7 @@ public abstract class OpenedDataCache<T> {
 	protected Class<T> type;
 	protected long cacheExpiration;
 	
-	protected abstract AsyncWork<T,Exception> open(IO.Readable io, WorkProgress progress, long work);
+	protected abstract AsyncWork<T,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work);
 	protected abstract boolean closeIOafterOpen();
 	protected abstract void close(T object);
 	
@@ -110,7 +110,7 @@ public abstract class OpenedDataCache<T> {
 						loading.unblockError(new Exception("Cannot open data for reading"));
 						return null;
 					}
-					AsyncWork<T,Exception> open = open(io, progress, work-work/4);
+					AsyncWork<T,Exception> open = open(data, io, progress, work-work/4);
 					Runnable onOpen = new Runnable() {
 						@Override
 						public void run() {

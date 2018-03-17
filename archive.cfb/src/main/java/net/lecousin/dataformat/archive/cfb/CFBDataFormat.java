@@ -53,7 +53,7 @@ public class CFBDataFormat extends ArchiveDataFormat {
 		
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<CFBFile,Exception> open(Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<CFBFile,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
 			CFBFile cfb;
 			try { cfb = new CFBFile((IO.Readable.Seekable&IO.KnownSize)io, true /* TODO */, progress, work); }
 			catch (Exception e) {

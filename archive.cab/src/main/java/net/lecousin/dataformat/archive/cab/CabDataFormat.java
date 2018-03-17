@@ -50,7 +50,7 @@ public class CabDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 	public static OpenedDataCache<CabFile> cache = new OpenedDataCache<CabFile>(CabFile.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<CabFile,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<CabFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			CabFile cab = CabFile.openReadOnly(io, progress, work);
 			SynchronizationPoint<IOException> sp = cab.onLoaded();
 			AsyncWork<CabFile,Exception> result = new AsyncWork<>();

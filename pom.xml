@@ -33,6 +33,9 @@
     <module>security</module>
     <module>text</module>
     <module>vm.vbox</module>
+    <module>mbr</module>
+    <module>filesystem</module>
+    <module>filesystem.ext</module>
   </modules>
   
   <licenses>

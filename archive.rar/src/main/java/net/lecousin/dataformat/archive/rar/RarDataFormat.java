@@ -59,7 +59,7 @@ public class RarDataFormat extends ArchiveDataFormat {
 	public static OpenedDataCache<RarArchive> cache = new OpenedDataCache<RarArchive>(RarArchive.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<RarArchive,Exception> open(Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<RarArchive,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
 			RarArchive rar = new RarArchive((IO.Readable.Seekable)io);
 			SynchronizationPoint<IOException> sp = rar.loadContent(progress, work);
 			AsyncWork<RarArchive,Exception> result = new AsyncWork<>();

@@ -261,7 +261,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 
 		private long getBlock(int index) {
 			if ((index + 1) * 4 > table.length || index < 0) {
-				LCCore.getApplication().getDefaultLogger().error("Invalid VDI Block index " + index + ": only " + (table.length / 4) + " blocks.");
+				LCCore.getApplication().getDefaultLogger().error("Invalid VDI Block index " + index + ": only " + (table.length / 4) + " blocks.", new Exception());
 				return 0xFFFFFFFFL; // like an empty block
 			}
 			return DataUtil.readUnsignedIntegerLittleEndian(table, index * 4);

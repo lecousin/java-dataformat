@@ -50,7 +50,7 @@ public class PDFDataFormat implements DataFormat {
 	public static OpenedDataCache<PDDocument> cache = new OpenedDataCache<PDDocument>(PDDocument.class, 30*6000) {
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<PDDocument,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<PDDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			InputStream is = IOAsInputStream.get(io);
 			PDDocument pdf;
 			try { pdf = PDDocument.load(is); }

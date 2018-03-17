@@ -41,7 +41,7 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 	public static OpenedDataCache<COFFArchive> cache = new OpenedDataCache<COFFArchive>(COFFArchive.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<COFFArchive,Exception> open(Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<COFFArchive,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
 			COFFArchive archive = new COFFArchive();
 			archive.scanContent(io, null, progress, work); // TODO be able to use an async collection
 			AsyncWork<COFFArchive,Exception> result = new AsyncWork<>();

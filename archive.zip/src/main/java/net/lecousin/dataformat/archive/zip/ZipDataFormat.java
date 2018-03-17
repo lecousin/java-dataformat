@@ -60,7 +60,7 @@ public class ZipDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<ZipArchive,Exception> open(IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncWork<ZipArchive,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			ZipArchive zip = ZipArchive.loadForExtraction((IO.Readable.Seekable&IO.KnownSize)io);
 			ISynchronizationPoint<IOException> sp = zip.getSynchOnReady();
 			AsyncWork<ZipArchive,Exception> result = new AsyncWork<>();
