@@ -30,6 +30,7 @@ public abstract class Data {
 	
 	public abstract String getName();
 	public abstract String getDescription();
+	/** returns -1 if size is unknown. */
 	public abstract long getSize();
 	
 	/** returns true if it has data inside, false if this is just a container but no data to analyze such as a file system directory. */
@@ -214,15 +215,39 @@ public abstract class Data {
 				}
 				// wrap the original IO inside a SubIO so every operation will be done using an absolute position
 				// allowing concurrent access to the IO
-				@SuppressWarnings("resource")
-				SubIO.Readable.Seekable.Buffered wrap = new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, 0, getSize(), io.getSourceDescription(), false);
-				wrap.addCloseListener(new Runnable() {
-					@Override
-					public void run() {
-						releaseIO();
-					}
-				});
-				sp.unblockSuccess((T)wrap);
+				long size = getSize();
+				if (size >= 0) {
+					@SuppressWarnings("resource")
+					SubIO.Readable.Seekable.Buffered wrap = new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, 0, size, io.getSourceDescription(), false);
+					wrap.addCloseListener(new Runnable() {
+						@Override
+						public void run() {
+							releaseIO();
+						}
+					});
+					sp.unblockSuccess((T)wrap);
+				} else {
+					AsyncWork<Long, IOException> getSize = ((IO.KnownSize)io).getSizeAsync();
+					getSize.listenAsync(new Task.Cpu.FromRunnable("Open Data IO", priority, () -> {
+						if (!getSize.isSuccessful()) {
+							releaseIO();
+							if (getSize.hasError())
+								sp.error(getSize.getError());
+							else
+								sp.cancel(getSize.getCancelEvent());
+							return;
+						}
+						@SuppressWarnings("resource")
+						SubIO.Readable.Seekable.Buffered wrap = new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, 0, getSize.getResult().longValue(), io.getSourceDescription(), false);
+						wrap.addCloseListener(new Runnable() {
+							@Override
+							public void run() {
+								releaseIO();
+							}
+						});
+						sp.unblockSuccess((T)wrap);
+					}), true);
+				}
 			}
 		});
 		sp.onCancel(new Listener<CancelException>() {

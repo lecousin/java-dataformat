@@ -11,7 +11,9 @@ import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable.Seekable;
+import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.math.RangeLong;
 
@@ -28,11 +30,14 @@ public class COFFDetector implements DataFormatDetector.MoreThanHeaderNeeded {
 	}
 	
 	@Override
-	public AsyncWork<DataFormat,NoException> finishDetection(Data data, byte[] header, int headerLength, Seekable io, long dataSize) {
+	public AsyncWork<DataFormat,NoException> finishDetection(Data data, byte[] header, int headerLength, IO.Readable.Seekable io, long dataSize) {
 		if (headerLength < 20)
 			return new AsyncWork<DataFormat,NoException>(null, null);
 		int nb_sections = DataUtil.readShortLittleEndian(header, 2);
 		if (nb_sections <= 0) return new AsyncWork<DataFormat,NoException>(null, null);
+		if (dataSize < 0)
+			try { dataSize = IOUtil.getSizeSync(io); }
+			catch (IOException e) { return new AsyncWork<DataFormat,NoException>(null, null); }
 		long symbolPointer = DataUtil.readUnsignedIntegerLittleEndian(header, 8);
 		long nbSymbols = DataUtil.readUnsignedIntegerLittleEndian(header, 12);
 		if (symbolPointer == 0) {

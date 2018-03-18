@@ -23,7 +23,7 @@ public class ExtFSDetector implements DataFormatDetector.MoreThanHeaderNeeded {
 
 	@Override
 	public AsyncWork<DataFormat, NoException> finishDetection(Data data, byte[] header, int headerLength, IO.Readable.Seekable io, long dataSize) {
-		if (dataSize < 2048) return new AsyncWork<>(null, null);
+		if (dataSize != -1 && dataSize < 2048) return new AsyncWork<>(null, null);
 		byte[] buf = new byte[2];
 		AsyncWork<DataFormat, NoException> result = new AsyncWork<>();
 		io.readFullyAsync(1024+0x38, ByteBuffer.wrap(buf)).listenInline(

@@ -32,7 +32,7 @@ public class MZDetector implements DataFormatDetector.OnlyHeaderNeeded {
 		int dataOffset = nbBlocks*512;
 		if (lastBlockSize != 0)
 			dataOffset = dataOffset-512+lastBlockSize;
-		if (dataOffset > dataSize)
+		if (dataSize != -1 && dataOffset > dataSize)
 			return null;
 		data.setProperty("MZDataOffset", new Integer(dataOffset));
 		return MZDataFormat.instance;

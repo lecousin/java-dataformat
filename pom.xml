@@ -36,6 +36,8 @@
     <module>mbr</module>
     <module>filesystem</module>
     <module>filesystem.ext</module>
+    <module>compress</module>
+    <module>compress.gzip</module>
   </modules>
   
   <licenses>
