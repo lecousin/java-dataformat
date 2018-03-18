@@ -37,8 +37,20 @@ public class ExtFSDataFile extends Data {
 	public Data getContainer() { return container; }
 
 	@Override
-	protected AsyncWork<IO, ? extends Exception> openIO(byte priority) {
+	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
 		return new AsyncWork<>(file.openContent(priority), null);
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		// TODO
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		// TODO
+		return null;
 	}
 	
 }

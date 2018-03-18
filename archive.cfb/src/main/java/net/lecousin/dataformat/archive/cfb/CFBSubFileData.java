@@ -47,8 +47,8 @@ public class CFBSubFileData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO, Exception> openIO(byte priority) {
-		AsyncWork<IO, Exception> sp = new AsyncWork<>();
+	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
+		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
 		AsyncWork<CachedObject<CFBFile>,Exception> get = CFBDataFormat.cache.open(cfbData, this, priority/*, false*/, null, 0);
 		get.listenInline(new Runnable() {
 			@Override
@@ -76,5 +76,15 @@ public class CFBSubFileData extends Data {
 			}
 		});
 		return sp;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		return null;
 	}
 }

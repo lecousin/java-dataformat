@@ -18,7 +18,7 @@ public class DIBInfo extends ImageDataFormatInfo {
 
 	public static AsyncWork<DIBInfo,Exception> load(Data data, byte priority, int offset) {
 		AsyncWork<DIBInfo,Exception> result = new AsyncWork<>();
-		AsyncWork<?, Exception> open = data.open(priority);
+		AsyncWork<?, Exception> open = data.openReadOnly(priority);
 		open.listenAsync(new Task.Cpu<Void, NoException>("Read DIBInfo from " + data.getDescription(), priority) {
 			@SuppressWarnings("resource")
 			@Override

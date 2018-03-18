@@ -62,7 +62,7 @@ public class ELFDataFormat implements DataFormat.DataContainerFlat {
 	@Override
 	public void populateSubData(Data data, AsyncCollection<Data> list) {
 		ELFInfo info = (ELFInfo)data.getProperty(ELFInfo.PROPERTY_NAME);
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.open(Task.PRIORITY_NORMAL);
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(Task.PRIORITY_NORMAL);
 		byte[] sectionEntryBuffer = new byte[info.sectionHeaderTableEntrySize];
 		open.listenInline(new Runnable() {
 			@Override

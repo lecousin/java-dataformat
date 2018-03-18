@@ -76,7 +76,7 @@ public class DIBReaderOp implements DataFormatReadOperation.OneToOne<DIBDataForm
 	
 	@Override
 	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		DIBImageProvider provider = (DIBImageProvider)data.getProperty(DIBImageProvider.DATA_PROPERTY);
 		if (provider == null)
 			provider = new DefaultProvider();

@@ -46,7 +46,7 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 	@SuppressWarnings("resource")
 	public static AsyncWork<OLEPropertySets,Exception> readOLEPropertySets(Data data, byte priority) {
 		AsyncWork<OLEPropertySets,Exception> sp = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		open.listenInline(new Runnable() {
 			@Override
 			public void run() {

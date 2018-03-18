@@ -93,7 +93,7 @@ public class ResourcesProcessor {
 						Object gi = e2.getValue();
 						if (gi instanceof SubData) {
 							SubData gi_data = (SubData)gi;
-							AsyncWork<? extends IO.Readable.Seekable,Exception> open = gi_data.open(Task.PRIORITY_NORMAL);
+							AsyncWork<? extends IO.Readable.Seekable,Exception> open = gi_data.openReadOnly(Task.PRIORITY_NORMAL);
 							@SuppressWarnings("resource")
 							IO.Readable.Seekable io = open.blockResult(0);
 							try {

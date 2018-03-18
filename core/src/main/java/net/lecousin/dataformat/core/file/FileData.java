@@ -76,10 +76,10 @@ public class FileData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO,? extends Exception> openIO(byte priority) {
+	protected AsyncWork<IO.Readable,? extends Exception> openIOReadOnly(byte priority) {
 		if (file.isDirectory()) return null;
 		FileIO.ReadOnly io = new FileIO.ReadOnly(file, priority);
-		AsyncWork<IO,Exception> sp = new AsyncWork<>();
+		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
 		io.canStart().listenInline(new Runnable() {
 			@Override
 			public void run() {
@@ -87,6 +87,39 @@ public class FileData extends Data {
 					sp.unblockCancel(io.canStart().getCancelEvent());
 				else if (io.canStart().isSuccessful())
 					sp.unblockSuccess(io);
+				else {
+					io.closeAsync();
+					sp.unblockError(io.canStart().getError());
+				}
+			}
+		});
+		sp.onCancel(new Listener<CancelException>() {
+			@Override
+			public void fire(CancelException event) {
+				io.canStart().cancel(event);
+			}
+		});
+		return sp;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return !file.isDirectory();
+	}
+	
+	@SuppressWarnings("resource")
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		FileIO.ReadWrite io = new FileIO.ReadWrite(file, priority);
+		AsyncWork<T, Exception> sp = new AsyncWork<>();
+		io.canStart().listenInline(new Runnable() {
+			@SuppressWarnings("unchecked")
+			@Override
+			public void run() {
+				if (io.canStart().isCancelled())
+					sp.unblockCancel(io.canStart().getCancelEvent());
+				else if (io.canStart().isSuccessful())
+					sp.unblockSuccess((T)io);
 				else {
 					io.closeAsync();
 					sp.unblockError(io.canStart().getError());

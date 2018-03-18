@@ -48,8 +48,18 @@ public class ZipFileData extends Data {
 			return data.getContainer();
 		}
 		@Override
-		protected AsyncWork<IO, Exception> openIO(byte priority) {
-			return data.openIO(priority);
+		protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
+			return data.openIOReadOnly(priority);
+		}
+		
+		@Override
+		protected boolean canOpenReadWrite() {
+			return false;
+		}
+		
+		@Override
+		protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+			return null;
 		}
 	}
 	
@@ -81,9 +91,9 @@ public class ZipFileData extends Data {
 	}
 	
 	@Override
-	protected AsyncWork<IO, Exception> openIO(byte priority) {
+	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
 		AsyncWork<CachedObject<ZipArchive>,Exception> get = ZipDataFormat.cache.open(ZipFileData.this.zip, ZipFileData.this, priority, null, 0);
-		AsyncWork<IO, Exception> sp = new AsyncWork<>();
+		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
 		get.listenInline(new AsyncWorkListener<CachedObject<ZipArchive>, Exception>() {
 			@Override
 			public void ready(CachedObject<ZipArchive> zip) {
@@ -127,5 +137,15 @@ public class ZipFileData extends Data {
 			}
 		});
 		return sp;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		return null;
 	}
 }

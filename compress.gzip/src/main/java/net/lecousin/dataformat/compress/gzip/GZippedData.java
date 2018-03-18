@@ -31,12 +31,22 @@ public class GZippedData extends Data {
 	public Data getContainer() { return container; }
 
 	@Override
-	protected AsyncWork<IO, ? extends Exception> openIO(byte priority) {
-		AsyncWork<IO, Exception> result = new AsyncWork<>();
-		container.open(priority).listenInline((io) -> {
+	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
+		AsyncWork<IO.Readable, Exception> result = new AsyncWork<>();
+		container.openReadOnly(priority).listenInline((io) -> {
 			result.unblockSuccess(new GZipReadable(io, priority));
 		}, result);
 		return result;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		return null;
 	}
 
 }

@@ -57,7 +57,7 @@ public class ODTReader implements DataFormatReadOperation.OneToOne<OpenDocumentT
 
 	@Override
 	public AsyncWork<Pair<OdfTextDocument, Object>, Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable, Exception> open = data.openReadOnly(priority);
 		AsyncWork<Pair<OdfTextDocument, Object>, Exception> result = new AsyncWork<>();
 		open.listenAsync(new Task.Cpu<Void, NoException>("Read ODT", priority) {
 			@Override

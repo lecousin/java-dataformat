@@ -38,6 +38,7 @@
     <module>filesystem.ext</module>
     <module>compress</module>
     <module>compress.gzip</module>
+    <module>vm</module>
   </modules>
   
   <licenses>

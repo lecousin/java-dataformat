@@ -55,9 +55,9 @@ public class SubData extends Data {
 	}
 
 	@Override
-	protected AsyncWork<IO, ? extends Exception> openIO(byte priority) {
-		AsyncWork<IO,Exception> result = new AsyncWork<>();
-		AsyncWork<? extends IO,Exception> open = parent.open(priority);
+	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
+		AsyncWork<IO.Readable, Exception> result = new AsyncWork<>();
+		AsyncWork<? extends IO.Readable, Exception> open = parent.openReadOnly(priority);
 		open.listenInline(new Runnable() {
 			@SuppressWarnings("resource")
 			@Override
@@ -76,6 +76,31 @@ public class SubData extends Data {
 		return result;
 	}
 	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return parent.canOpenReadWrite();
+	}
 	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		AsyncWork<T, Exception> result = new AsyncWork<>();
+		AsyncWork<T, ? extends Exception> open = parent.openReadWrite(priority);
+		open.listenInline(new Runnable() {
+			@SuppressWarnings({ "resource", "unchecked" })
+			@Override
+			public void run() {
+				if (!open.isSuccessful()) {
+					if (open.isCancelled())
+						result.unblockCancel(open.getCancelEvent());
+					else
+						result.unblockError(open.getError());
+					return;
+				}
+				T io = open.getResult();
+				result.unblockSuccess((T)new SubIO.ReadWrite(io, offset, size, name, true));
+			}
+		});
+		return result;
+	}
 	
 }

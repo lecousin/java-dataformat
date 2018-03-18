@@ -51,7 +51,7 @@ public class PNGReaderOp implements DataFormatReadOperation.OneToOne<PNGDataForm
 	
 	@Override
 	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		AsyncWork<Pair<BufferedImage,Object>,Exception> sp = new AsyncWork<>();
 		open.listenInline(new Runnable() {
 			@Override

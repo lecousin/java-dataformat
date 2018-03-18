@@ -44,18 +44,19 @@ public abstract class Data {
 	 */
 	
 	private AsyncWork<Void, Exception> ioLoading = null;
-	private IO io = null;
+	private IO.Readable io = null;
 	private int ioUsage = 0;
 	private Task<Void,NoException> closeIO = null;
+	private AsyncWork<? extends IO, ? extends Exception> rwIO = null;
 	
-	public void forceCloseAllIO() {
+	public void forceCloseIOReadOnly() {
 		synchronized (this) {
 			if (closeIO != null) {
-				closeIO.cancel(new CancelException("forceCloseAllIO called"));
+				closeIO.cancel(new CancelException("forceCloseIOReadOnly called"));
 				closeIO = null;
 			}
 			if (ioLoading != null) {
-				ioLoading.cancel(new CancelException("forceCloseAllIO called"));
+				ioLoading.cancel(new CancelException("forceCloseIOReadOnly called"));
 				ioLoading = null;
 			}
 			if (io != null) {
@@ -65,7 +66,7 @@ public abstract class Data {
 		}
 	}
 	
-	private AsyncWork<Void, Exception> prepareIO(byte priority) {
+	private AsyncWork<Void, Exception> prepareIOReadOnly(byte priority) {
 		synchronized (this) {
 			if (closeIO != null) {
 				closeIO.cancel(new CancelException("IO used again"));
@@ -80,7 +81,7 @@ public abstract class Data {
 			if (ioLoading == null) {
 				// first usage
 				ioLoading = new AsyncWork<Void, Exception>();
-				AsyncWork<IO,? extends Exception> originalIO = openIO(priority);
+				AsyncWork<IO.Readable,? extends Exception> originalIO = openIOReadOnly(priority);
 				if (originalIO == null) {
 					ioLoading = null;
 					return new AsyncWork<>(null,null);
@@ -101,7 +102,7 @@ public abstract class Data {
 								ioLoading.unblockError(originalIO.getError());
 								return;
 							}
-							IO oio = originalIO.getResult();
+							IO.Readable oio = originalIO.getResult();
 							if (oio == null) {
 								ioLoading.unblockSuccess(null);
 								return;
@@ -121,7 +122,7 @@ public abstract class Data {
 								}
 							} else {
 								// only streaming, let's make it better
-								try { io = new ReadableToSeekable((IO.Readable)oio, 16384); }
+								try { io = new ReadableToSeekable(oio, 16384); }
 								catch (IOException e) {
 									ioLoading.unblockError(e);
 									return;
@@ -143,7 +144,7 @@ public abstract class Data {
 							if (ioLoading != null) {
 								ioLoading.unblockCancel(event);
 								if (!ioLoading.isCancelled())
-									releaseIO();
+									releaseIOReadOnly();
 								else {
 									ioLoading = null;
 									ioUsage = 0;
@@ -172,7 +173,8 @@ public abstract class Data {
 			return sp;
 		}
 	}
-	private void releaseIO() {
+	
+	private void releaseIOReadOnly() {
 		synchronized (this) {
 			ioUsage--;
 			if (ioUsage == 0) {
@@ -196,8 +198,10 @@ public abstract class Data {
 		}
 	}
 	
-	public <T extends IO.Readable.Seekable&IO.Readable.Buffered&IO.KnownSize> AsyncWork<T,Exception> open(byte priority) {
-		AsyncWork<Void, Exception> prepare = prepareIO(priority);
+	public <T extends IO.Readable.Seekable&IO.Readable.Buffered&IO.KnownSize> AsyncWork<T,Exception> openReadOnly(byte priority) {
+		if (rwIO != null)
+			return new AsyncWork<>(null, new Exception("Data already open for modification"));
+		AsyncWork<Void, Exception> prepare = prepareIOReadOnly(priority);
 		AsyncWork<T,Exception> sp = new AsyncWork<>();
 		prepare.listenInline(new Runnable() {
 			@SuppressWarnings("unchecked")
@@ -222,7 +226,7 @@ public abstract class Data {
 					wrap.addCloseListener(new Runnable() {
 						@Override
 						public void run() {
-							releaseIO();
+							releaseIOReadOnly();
 						}
 					});
 					sp.unblockSuccess((T)wrap);
@@ -230,7 +234,7 @@ public abstract class Data {
 					AsyncWork<Long, IOException> getSize = ((IO.KnownSize)io).getSizeAsync();
 					getSize.listenAsync(new Task.Cpu.FromRunnable("Open Data IO", priority, () -> {
 						if (!getSize.isSuccessful()) {
-							releaseIO();
+							releaseIOReadOnly();
 							if (getSize.hasError())
 								sp.error(getSize.getError());
 							else
@@ -242,7 +246,7 @@ public abstract class Data {
 						wrap.addCloseListener(new Runnable() {
 							@Override
 							public void run() {
-								releaseIO();
+								releaseIOReadOnly();
 							}
 						});
 						sp.unblockSuccess((T)wrap);
@@ -259,7 +263,27 @@ public abstract class Data {
 		return sp;
 	}
 	
-	protected abstract AsyncWork<IO,? extends Exception> openIO(byte priority);
+	public <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openReadWrite(byte priority) {
+		if (rwIO != null)
+			return new AsyncWork<>(null, new Exception("Data already open for modification"));
+		if (!canOpenReadWrite())
+			return new AsyncWork<>(null, new Exception("Modification not supported"));
+		forceCloseIOReadOnly();
+		AsyncWork<T, ? extends Exception> open = openIOReadWrite(priority);
+		rwIO = open;
+		rwIO.listenInline(() -> {
+			if (!open.isSuccessful())
+				rwIO = null;
+			else
+				open.getResult().addCloseListener(() -> { rwIO = null; });
+		});
+		return open;
+	}
+	
+	protected abstract AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority);
+	
+	protected abstract boolean canOpenReadWrite();
+	protected abstract <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority);
 	
 	
 	private DataFormat format = null;
@@ -302,7 +326,15 @@ public abstract class Data {
 	}
 	
 	public void releaseEverything() {
-		forceCloseAllIO();
+		forceCloseIOReadOnly();
+		if (rwIO != null) {
+			if (!rwIO.isUnblocked())
+				rwIO.cancel(new CancelException("Data.releaseEverything called"));
+			else if (rwIO.isSuccessful())
+				try { rwIO.getResult().close(); }
+				catch (Throwable t) {}
+			rwIO = null;
+		}
 		releaseAllCachedData();
 		removeAllProperties();
 	}
@@ -316,7 +348,7 @@ public abstract class Data {
 		private static final long STEP_SPE = 298;
 		private WorkProgressImpl progress = new WorkProgressImpl(PROGRESS_AMOUNT);
 		public void run(byte priority) {
-			open = open(priority);
+			open = openReadOnly(priority);
 			byte[] header = new byte[512];
 			MutableInteger headerSize = new MutableInteger(0);
 			open.listenInline(new Runnable() {

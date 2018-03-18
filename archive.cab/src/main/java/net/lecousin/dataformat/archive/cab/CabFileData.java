@@ -40,10 +40,10 @@ public class CabFileData extends Data {
 	}
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO, Exception> openIO(byte priority) {
+	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
 		if (file.getSize() == 0)
 			return new AsyncWork<>(new EmptyReadable(file.getName(), priority),null);
-		AsyncWork<IO, Exception> sp = new AsyncWork<>();
+		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
 		AsyncWork<CachedObject<CabFile>, Exception> c = CabDataFormat.cache.open(cab, this, priority, null, 0);
 		c.listenInline(new Runnable() {
 			@Override
@@ -77,4 +77,13 @@ public class CabFileData extends Data {
 		return sp;
 	}
 	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		return null;
+	}
 }

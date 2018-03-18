@@ -24,7 +24,7 @@ public class ResourceDataType_Manifest implements DataFormat {
 	@Override
 	public AsyncWork<ManifestDataInfo, Exception> getInfo(Data data, byte priority) {
 		AsyncWork<ManifestDataInfo, Exception> result = new AsyncWork<ManifestDataInfo, Exception>();
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(priority);
 		open.listenInline(new Runnable() {
 			@SuppressWarnings("resource")
 			@Override

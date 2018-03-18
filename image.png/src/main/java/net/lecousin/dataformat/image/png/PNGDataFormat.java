@@ -46,7 +46,7 @@ public class PNGDataFormat extends ImageDataFormat {
 	@Override
 	public AsyncWork<DataFormatInfo,Exception> getInfo(final Data data, final byte priority) {
 		AsyncWork<DataFormatInfo,Exception> sp = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		ByteBuffer buf = ByteBuffer.allocate(4+4+13);
 		open.listenInline(new Runnable() {
 			@Override

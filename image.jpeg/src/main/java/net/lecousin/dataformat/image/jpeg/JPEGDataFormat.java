@@ -40,7 +40,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 	
 	@Override
 	public AsyncWork<JPEGInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<?,Exception> open = data.open(priority);
+		AsyncWork<?,Exception> open = data.openReadOnly(priority);
 		if (open == null)
 			return new AsyncWork<>(null,null);
 		@SuppressWarnings({ "unchecked", "rawtypes" })

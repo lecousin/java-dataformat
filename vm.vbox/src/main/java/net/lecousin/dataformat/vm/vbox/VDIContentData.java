@@ -35,8 +35,8 @@ public class VDIContentData extends Data {
 	}
 
 	@Override
-	protected AsyncWork<IO, ? extends Exception> openIO(byte priority) {
-		AsyncWork<IO, Exception> result = new AsyncWork<>();
+	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
+		AsyncWork<IO.Readable, Exception> result = new AsyncWork<>();
 		AsyncWork<CachedObject<VirtualBoxDiskImage>, Exception> get = VDIDataFormat.cache.open(vdi, this, priority, null, 0);
 		get.listenInlineSP(() -> {
 			@SuppressWarnings("resource")
@@ -47,6 +47,18 @@ public class VDIContentData extends Data {
 			result.unblockSuccess(io);
 		}, result);
 		return result;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		// TODO
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+		// TODO
+		return null;
 	}
 	
 }

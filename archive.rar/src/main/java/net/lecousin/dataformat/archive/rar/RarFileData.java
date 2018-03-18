@@ -41,8 +41,18 @@ public class RarFileData extends Data {
 	}
 
 	@Override
-	protected AsyncWork<IO, ? extends Exception> openIO(byte priority) {
+	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
 		// TODO Auto-generated method stub
+		return null;
+	}
+	
+	@Override
+	protected boolean canOpenReadWrite() {
+		return false;
+	}
+	
+	@Override
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
 		return null;
 	}
 	

@@ -63,7 +63,7 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 	@Override
 	public AsyncWork<COFFInfo, Exception> getInfo(Data data, byte priority) {
 		AsyncWork<COFFInfo,Exception> result = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(priority);
 		open.listenInline(new Runnable() {
 			@Override
 			public void run() {
@@ -109,7 +109,7 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 	
 	@Override
 	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.open(Task.PRIORITY_NORMAL);
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(Task.PRIORITY_NORMAL);
 		open.listenInline(new Runnable() {
 			@Override
 			public void run() {

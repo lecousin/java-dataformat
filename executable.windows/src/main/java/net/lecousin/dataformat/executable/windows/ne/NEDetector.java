@@ -34,7 +34,7 @@ public class NEDetector implements DataFormatDetector.OnlyHeaderNeeded {
 				return new AsyncWork<>(null, null);
 			}
 			AsyncWork<DataFormat, NoException> result = new AsyncWork<>();
-			AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.open(Task.PRIORITY_NORMAL);
+			AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(Task.PRIORITY_NORMAL);
 			open.listenInline(new Runnable() {
 				@Override
 				public void run() {

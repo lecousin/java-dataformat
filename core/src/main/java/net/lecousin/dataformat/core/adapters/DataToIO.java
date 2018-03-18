@@ -19,7 +19,7 @@ public class DataToIO {
 		}
 		@Override
 		public IO.Readable adapt(Data input) {
-			AsyncWork<? extends IO.Readable.Seekable, Exception> sp = input.open(Task.PRIORITY_NORMAL);
+			AsyncWork<? extends IO.Readable.Seekable, Exception> sp = input.openReadOnly(Task.PRIORITY_NORMAL);
 			sp.block(0);
 			return sp.getResult();
 		}
@@ -35,7 +35,7 @@ public class DataToIO {
 			}
 			@Override
 			public IO.Readable.Seekable adapt(Data input) {
-				AsyncWork<? extends IO.Readable.Seekable, Exception> sp = input.open(Task.PRIORITY_NORMAL);
+				AsyncWork<? extends IO.Readable.Seekable, Exception> sp = input.openReadOnly(Task.PRIORITY_NORMAL);
 				sp.block(0);
 				IO.Readable io = sp.getResult();
 				return (IO.Readable.Seekable)io;

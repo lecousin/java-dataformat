@@ -29,7 +29,7 @@ public class VersionInfoDataFormat implements DataFormat {
 	@Override
 	public AsyncWork<VersionInfo, Exception> getInfo(Data data, byte priority) {
 		AsyncWork<VersionInfo, Exception> result = new AsyncWork<VersionInfo, Exception>();
-		AsyncWork<? extends IO.Readable.Buffered,Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Buffered,Exception> open = data.openReadOnly(priority);
 		open.listenInline(new Runnable() {
 			@Override
 			public void run() {

@@ -51,7 +51,7 @@ public class JPEGReaderOp implements DataFormatReadOperation.OneToOne<JPEGDataFo
 	
 	@Override
 	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		Task<Pair<BufferedImage,Object>,Exception> task = new Task.Cpu<Pair<BufferedImage,Object>,Exception>("Reading JPEG data", priority) {
 			@Override
 			public Pair<BufferedImage,Object> run() throws Exception {

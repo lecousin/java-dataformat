@@ -84,7 +84,7 @@ public abstract class OpenedDataCache<T> {
 			AsyncWork<CachedObject<T>,Exception> sp = new AsyncWork<>();
 			data.setProperty(type.getName() + "Loading", loading);
 			data.setProperty(type.getName() + "LoadingCounter", new Integer(1));
-			AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.open(priority);
+			AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 			Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Loading " + type.getSimpleName(), priority) {
 				@SuppressWarnings("resource")
 				@Override
