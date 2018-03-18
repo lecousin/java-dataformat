@@ -23,7 +23,7 @@ public class UnknownDataFormat implements DataFormat {
 		return null;
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/unknown_", ".png", 16, 32, 48, 64, 128);
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/images/unknown_", ".png", 16, 32, 48, 64, 128);
 	@Override
 	public IconProvider getIconProvider() { return iconProvider; }
 	

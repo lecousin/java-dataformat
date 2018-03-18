@@ -1,4 +1,7 @@
-empty=empty
 directory=directory
+empty=empty
 file type=file type
+new file=new file
+remove=remove
+rename=rename
 unknown=unknown

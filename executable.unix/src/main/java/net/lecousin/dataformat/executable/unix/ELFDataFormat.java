@@ -3,7 +3,6 @@ package net.lecousin.dataformat.executable.unix;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.List;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
@@ -13,16 +12,12 @@ import net.lecousin.dataformat.core.SubData;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.provider.IOProvider.Readable;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-import net.lecousin.framework.util.Pair;
 
 public class ELFDataFormat implements DataFormat.DataContainerFlat {
 	
@@ -208,48 +203,4 @@ public class ELFDataFormat implements DataFormat.DataContainerFlat {
 		return null;
 	}
 
-	@Override
-	public boolean canRenameSubData(Data data, Data subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> renameSubData(Data data, Data subData, String newName, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canRemoveSubData(Data data, List<Data> subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> removeSubData(Data data, List<Data> subData, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canAddSubData(Data parent) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> addSubData(Data data, List<Pair<String, Readable>> subData, byte priority) {
-		return null;
-	}
-	
-	@Override
-	public AsyncWork<Pair<Data, Writable>, ? extends Exception> createSubData(Data data, String name, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canCreateDirectory(Data parent) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> createDirectory(Data parent, String name, byte priority) {
-		return null;
-	}
 }

@@ -3,6 +3,8 @@ package net.lecousin.dataformat.core;
 import java.util.ArrayList;
 import java.util.Collection;
 
+import net.lecousin.dataformat.core.actions.DataAction;
+import net.lecousin.dataformat.core.actions.DataActionsRegistry;
 import net.lecousin.dataformat.core.operations.DataOperationsRegistry;
 import net.lecousin.dataformat.core.operations.IOperation;
 import net.lecousin.framework.plugins.ExtensionPoint;
@@ -27,6 +29,9 @@ public class DataFormatExtensionPoint implements ExtensionPoint<DataFormatPlugin
 		
 		for (DataFormatSpecializationDetector detector : plugin.getSpecializationDetectors())
 			DataFormatRegistry.registerSpecializationDetector(detector);
+		
+		for (DataAction action : plugin.getActions())
+			DataActionsRegistry.register(action);
 		
 		for (IOperation<?> op : plugin.getOperations())
 			DataOperationsRegistry.register(op);

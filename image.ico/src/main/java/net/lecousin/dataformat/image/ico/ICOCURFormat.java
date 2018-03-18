@@ -6,9 +6,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
@@ -21,15 +18,14 @@ import net.lecousin.dataformat.image.bmp.io.DIBReader;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.provider.IOProvider.Readable;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.util.Pair;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public abstract class ICOCURFormat extends ImageDataFormat.Multiple {
 
@@ -246,49 +242,4 @@ public abstract class ICOCURFormat extends ImageDataFormat.Multiple {
 		return new AsyncWork<>(null, null);
 	}
 	
-	@Override
-	public boolean canRenameSubData(Data data, Data subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> renameSubData(Data data, Data subData, String newName, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canRemoveSubData(Data data, List<Data> subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> removeSubData(Data data, List<Data> subData, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canAddSubData(Data parent) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> addSubData(Data data, List<Pair<String, Readable>> subData, byte priority) {
-		return null;
-	}
-
-	@Override
-	public AsyncWork<Pair<Data, Writable>, ? extends Exception> createSubData(Data data, String name, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canCreateDirectory(Data parent) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> createDirectory(Data parent, String name, byte priority) {
-		return null;
-	}
-
 }

@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
+import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.dataformat.core.operations.IOperation;
 import net.lecousin.dataformat.executable.windows.coff.COFFDataFormat;
 import net.lecousin.dataformat.executable.windows.coff.COFFDetector;
@@ -55,7 +56,12 @@ public class WinExeDataFormatPlugin implements DataFormatPlugin {
 			new MZSpecializationDetector()
 		};
 	}
-	
+
+	@Override
+	public DataAction[] getActions() {
+		return new DataAction[0];
+	}
+
 	@Override
 	public IOperation<?>[] getOperations() {
 		return new IOperation<?>[] {};

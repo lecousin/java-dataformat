@@ -3,7 +3,6 @@ package net.lecousin.dataformat.archive.rar;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.List;
 
 import net.lecousin.dataformat.archive.ArchiveDataFormat;
 import net.lecousin.dataformat.core.Data;
@@ -13,20 +12,16 @@ import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
-import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.provider.IOProvider;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-import net.lecousin.framework.util.Pair;
 
 public class RarDataFormat extends ArchiveDataFormat {
 
@@ -154,49 +149,4 @@ public class RarDataFormat extends ArchiveDataFormat {
 		return null;
 	}
 
-	@Override
-	public boolean canRenameSubData(Data data, Data subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> renameSubData(Data data, Data subData, String newName, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canRemoveSubData(Data data, List<Data> subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> removeSubData(Data data, List<Data> subData, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canAddSubData(Data parent) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> addSubData(Data data, List<Pair<String, IOProvider.Readable>> subData, byte priority) {
-		return null;
-	}
-	
-	@Override
-	public AsyncWork<Pair<Data, Writable>, ? extends Exception> createSubData(Data data, String name, byte priority) {
-		return null;
-	}
-
-	@Override
-	public boolean canCreateDirectory(Data parent) {
-		return false;
-	}
-	
-	@Override
-	public ISynchronizationPoint<Exception> createDirectory(Data parent, String name, byte priority) {
-		return null;
-	}
-	
 }

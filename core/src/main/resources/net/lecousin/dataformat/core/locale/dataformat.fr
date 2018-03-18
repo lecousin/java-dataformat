@@ -1,4 +1,7 @@
-empty=vide
 directory=répertoire
+empty=vide
 file type=type de fichier
+new file=nouveau fichier
+remove=supprimer
+rename=renommer
 unknown=inconnu

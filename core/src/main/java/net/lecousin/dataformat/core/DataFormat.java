@@ -1,16 +1,10 @@
 package net.lecousin.dataformat.core;
 
-import java.util.List;
-
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.provider.IOProvider;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-import net.lecousin.framework.util.Pair;
 
 public interface DataFormat {
 	
@@ -56,19 +50,6 @@ public interface DataFormat {
 		
 		public Class<? extends DataCommonProperties> getSubDataCommonProperties();
 		public DataCommonProperties getSubDataCommonProperties(Data subData);
-		
-		public boolean canRenameSubData(Data data, Data subData);
-		public ISynchronizationPoint<? extends Exception> renameSubData(Data data, Data subData, String newName, byte priority);
-		
-		public boolean canRemoveSubData(Data data, List<Data> subData);
-		public ISynchronizationPoint<? extends Exception> removeSubData(Data data, List<Data> subData, byte priority);
-		
-		public boolean canAddSubData(Data parent);
-		public ISynchronizationPoint<? extends Exception> addSubData(Data data, List<Pair<String, IOProvider.Readable>> subData, byte priority);
-		public AsyncWork<Pair<Data,IO.Writable>, ? extends Exception> createSubData(Data data, String name, byte priority);
-		
-		public boolean canCreateDirectory(Data parent);
-		public ISynchronizationPoint<? extends Exception> createDirectory(Data parent, String name, byte priority);
 	}
 
 	public static interface DataContainerHierarchy extends DataFormat, DataContainerFlat {

@@ -23,7 +23,7 @@ public class EmptyDataFormat implements DataFormat {
 		return null;
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/blank_", ".png", 16, 32, 48, 64, 128);
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/images/blank_", ".png", 16, 32, 48, 64, 128);
 	@Override
 	public IconProvider getIconProvider() { return iconProvider; }
 

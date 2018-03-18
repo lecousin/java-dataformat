@@ -6,7 +6,6 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -100,16 +99,6 @@ public class GZipDataFormat extends CompressedDataFormat {
 			res.release(GZipDataFormat.this);
 		}, result);
 		return result;
-	}
-	
-	@Override
-	public boolean canRenameSubData(Data data, Data subData) {
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<? extends Exception> renameSubData(Data data, Data subData, String newName, byte priority) {
-		return null;
 	}
 
 }

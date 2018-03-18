@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
+import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.dataformat.core.operations.IOperation;
 import net.lecousin.dataformat.document.openoffice.operations.ODT2PDF;
 import net.lecousin.dataformat.document.openoffice.operations.ODTReader;
@@ -34,6 +35,11 @@ public class OpenOfficeDataFormatPlugin implements DataFormatPlugin {
 		return new DataFormatSpecializationDetector[] {
 			new OpenOfficeDetector()
 		};
+	}
+
+	@Override
+	public DataAction[] getActions() {
+		return new DataAction[0];
 	}
 	
 	@Override

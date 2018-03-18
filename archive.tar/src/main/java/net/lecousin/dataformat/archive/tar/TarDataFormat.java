@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Set;
 
 import net.lecousin.dataformat.archive.ArchiveDataFormat;
@@ -21,13 +20,10 @@ import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.IO.Writable;
-import net.lecousin.framework.io.provider.IOProvider.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.util.Pair;
 
 public class TarDataFormat extends ArchiveDataFormat implements DataFormat.DataContainerHierarchy {
 
@@ -261,58 +257,4 @@ public class TarDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 		return null;
 	}
 
-	@Override
-	public boolean canRenameSubData(Data data, Data subData) {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> renameSubData(Data data, Data subData, String newName, byte priority) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public boolean canRemoveSubData(Data data, List<Data> subData) {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> removeSubData(Data data, List<Data> subData, byte priority) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-
-	@Override
-	public boolean canAddSubData(Data parent) {
-		// TODO Auto-generated method stub
-		return false;
-	}
-
-	@Override
-	public ISynchronizationPoint<Exception> addSubData(Data data, List<Pair<String, Readable>> subData, byte priority) {
-		// TODO Auto-generated method stub
-		return null;
-	}
-	
-	@Override
-	public AsyncWork<Pair<Data, Writable>, ? extends Exception> createSubData(Data data, String name, byte priority) {
-		// TODO
-		return null;
-	}
-
-	@Override
-	public boolean canCreateDirectory(Data parent) {
-		// TODO
-		return false;
-	}
-	
-	@Override
-	public ISynchronizationPoint<Exception> createDirectory(Data parent, String name, byte priority) {
-		// TODO
-		return null;
-	}
-	
 }

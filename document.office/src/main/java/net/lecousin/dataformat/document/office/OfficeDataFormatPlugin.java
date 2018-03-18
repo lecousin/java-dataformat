@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
+import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.dataformat.core.operations.IOperation;
 import net.lecousin.dataformat.document.office.operations.DOC2PDF;
 import net.lecousin.dataformat.document.office.operations.DOCX2PDF;
@@ -38,6 +39,11 @@ public class OfficeDataFormatPlugin implements DataFormatPlugin {
 			new OfficeOpenXMLDetector(),
 			new CFBSpecializationDetector(),
 		};
+	}
+
+	@Override
+	public DataAction[] getActions() {
+		return new DataAction[0];
 	}
 	
 	@Override
