@@ -41,6 +41,11 @@ public abstract class ExtFSEntry {
 	public String getName() {
 		return name;
 	}
+
+	public long getSize() throws Exception {
+		INode inode = loadINode().blockResult(0);
+		return inode.size;
+	}
 	
 	public ExtFSEntryIO openContent(byte priority) {
 		return ExtFSEntryIO.open(this, priority);

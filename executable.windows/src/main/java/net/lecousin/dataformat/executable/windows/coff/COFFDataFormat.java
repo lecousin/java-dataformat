@@ -9,12 +9,12 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -26,6 +26,8 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
+import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
 import net.lecousin.framework.util.StringUtil;
@@ -33,7 +35,7 @@ import net.lecousin.framework.util.StringUtil;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 
-public class COFFDataFormat implements DataFormat.DataContainerFlat {
+public class COFFDataFormat implements ContainerDataFormat {
 
 	public static final COFFDataFormat instance = new COFFDataFormat();
 	
@@ -105,35 +107,48 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(Task.PRIORITY_NORMAL);
-		open.listenInline(new Runnable() {
-			@Override
-			public void run() {
-				if (!open.isSuccessful()) {
-					list.done();
-					return;
-				}
-				@SuppressWarnings("resource")
-				IO.Readable.Seekable io = open.getResult();
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = container.openReadOnly(Task.PRIORITY_NORMAL);
+		WorkProgress progress = new WorkProgressImpl(10000, "Reading COFF sections");
+		open.listenInline(
+			(io) -> {
+				progress.progress(500);
 				byte[] buf = new byte[40];
 				AsyncWork<Integer,IOException> read = io.readAsync(0, ByteBuffer.wrap(buf,0,20));
-				read.listenInline(new Runnable() {
-					@Override
-					public void run() {
-						if (!read.isSuccessful()) {
-							list.done();
-							io.closeAsync();
-							return;
-						}
-						int nb_sections = DataUtil.readUnsignedShortLittleEndian(buf, 2);
-						int size_opt_headers = DataUtil.readUnsignedShortLittleEndian(buf, 16);
-						long pos = 20+size_opt_headers;
-						readSection(data, ((Long)data.getProperty("COFFOffset")).longValue(), io, 0, nb_sections, pos, list, buf, new ArrayList<Section>(nb_sections), -1);
+				read.listenInline(() -> {
+					if (read.hasError()) {
+						listener.error(read.getError());
+						progress.error(read.getError());
+						io.closeAsync();
+						return;
 					}
+					if (read.isCancelled()) {
+						listener.elementsReady(new ArrayList<>(0));
+						progress.done();
+						io.closeAsync();
+						return;
+					}
+					int nb_sections = DataUtil.readUnsignedShortLittleEndian(buf, 2);
+					int size_opt_headers = DataUtil.readUnsignedShortLittleEndian(buf, 16);
+					long pos = 20+size_opt_headers;
+					progress.progress(200);
+					readSection(container, ((Long)container.getProperty("COFFOffset")).longValue(), io, 0, nb_sections, pos, buf, new ArrayList<Section>(nb_sections), -1, listener, progress, 10000 - 500 - 200 - 300);
 				});
+			},
+			(error) -> {
+				listener.error(error);
+				progress.error(error);
+			},
+			(cancel) -> {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
 			}
-		});
+		);
+		return progress;
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 	
 	private static class Section {
@@ -141,7 +156,7 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 		long virtual_addr, virtual_size;
 		long real_addr, real_size;
 	}
-	private void readSection(Data data, long offset, IO.Readable.Seekable io, int sectionIndex, int nbSections, long pos, AsyncCollection<Data> list, byte[] buf, ArrayList<Section> sections, long min_section_start) {
+	private void readSection(Data data, long offset, IO.Readable.Seekable io, int sectionIndex, int nbSections, long pos, byte[] buf, ArrayList<Section> sections, long min_section_start, CollectionListener<Data> listener, WorkProgress progress, long work) {
 		if (sectionIndex == nbSections) {
 			Task.Cpu<Void, NoException> task = new Task.Cpu<Void, NoException>("Reading COFF sections", Task.PRIORITY_NORMAL) {
 				@Override
@@ -164,8 +179,8 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 						SubData hidden = new SubData(data, r.min, r.max-r.min+1, "Hidden data "+(i++));
 						datas.add(hidden);
 					}
-					list.newElements(datas);
-					list.done();
+					listener.elementsReady(datas);
+					progress.done();
 					io.closeAsync();
 					return null;
 				}
@@ -173,12 +188,13 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 			task.start();
 			return;
 		}
+		long step = work / (nbSections - sectionIndex);
 		AsyncWork<Integer,IOException> read = io.readAsync(pos, ByteBuffer.wrap(buf));
 		read.listenInline(new Runnable() {
 			@Override
 			public void run() {
 				if (!read.isSuccessful()) {
-					readSection(data, offset, io, nbSections, nbSections, pos, list, buf, sections, min_section_start);
+					readSection(data, offset, io, nbSections, nbSections, pos, buf, sections, min_section_start, listener, progress, work);
 					return;
 				}
 				int j;
@@ -195,7 +211,8 @@ public class COFFDataFormat implements DataFormat.DataContainerFlat {
 				if (s.real_size > 0)
 					if (min == -1 || s.real_addr < min) min = s.real_addr;
 				sections.add(s);
-				readSection(data, offset, io, sectionIndex+1, nbSections, pos+40, list, buf, sections, min);
+				progress.progress(step);
+				readSection(data, offset, io, sectionIndex+1, nbSections, pos+40, buf, sections, min, listener, progress, work - step);
 			}
 		});
 	}

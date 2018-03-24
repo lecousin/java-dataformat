@@ -1,20 +1,18 @@
 package net.lecousin.dataformat.executable.windows.msdos;
 
-import java.util.Collections;
-
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
+import net.lecousin.dataformat.core.DataWrapperDataFormat;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
-import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class MZDataFormat implements DataFormat.DataContainerFlat {
+public class MZDataFormat implements DataWrapperDataFormat {
 
 	public static final MZDataFormat instance = new MZDataFormat();
 	
@@ -55,25 +53,21 @@ public class MZDataFormat implements DataFormat.DataContainerFlat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		SubData sd = (SubData)data.getProperty("MZSubData");
+	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+		SubData sd = (SubData)container.getProperty("MZSubData");
 		if (sd == null) {
-			Integer offset = (Integer)data.getProperty("MZDataOffset");
-			if (offset == null) {
-				list.done();
-				return;
-			}
+			Integer offset = (Integer)container.getProperty("MZDataOffset");
+			if (offset == null)
+				return new AsyncWork<>(null, null);
 			int off = offset.intValue();
-			long size = data.getSize();
-			if (off == size) {
-				list.done();
-				return;
-			}
-			sd = new SubData(data, off, size-off, "Data");
-			data.setProperty("MZSubData", sd);
+			long size = container.getSize();
+			if (off == size)
+				return new AsyncWork<>(null, null);
+			sd = new SubData(container, off, size-off, "Data");
+			container.setProperty("MZSubData", sd);
 		}
-		list.newElements(Collections.singletonList(sd));
-		list.done();
+		progress.progress(work);
+		return new AsyncWork<>(sd, null);
 	}
 	
 	@Override

@@ -5,25 +5,35 @@ import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
 
-public class ExtFSDataFile extends Data {
+public class ExtFSData extends Data {
 
-	ExtFSDataFile(Data container, ExtFile file) {
+	ExtFSData(Data container, ExtFSEntry entry) {
 		this.container = container;
-		this.file = file;
+		this.entry = entry;
+		// launch inode loading
+		entry.loadINode();
+		// if directory, set the format
+		if (entry instanceof ExtDirectory)
+			setFormat(ExtFSDirectoryDataFormat.instance);
 	}
 	
 	protected Data container;
-	protected ExtFile file;
+	protected ExtFSEntry entry;
 	
 	@Override
-	public String getName() { return file.getName(); }
+	public String getName() { return entry.getName(); }
 
 	@Override
-	public String getDescription() { return file.getName(); }
+	public String getDescription() {
+		StringBuilder s = new StringBuilder(container.getDescription());
+		s.append('/');
+		s.append(entry.getName());
+		return s.toString();
+	}
 
 	@Override
 	public long getSize() {
-		try { return file.getSize(); }
+		try { return entry.getSize(); }
 		catch (Exception e) {
 			LCCore.getApplication().getDefaultLogger().error("Error reading ExtFS inode", e);
 			return 0;
@@ -38,7 +48,7 @@ public class ExtFSDataFile extends Data {
 
 	@Override
 	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
-		return new AsyncWork<>(file.openContent(priority), null);
+		return new AsyncWork<>(entry.openContent(priority), null);
 	}
 	
 	@Override

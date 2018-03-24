@@ -5,3 +5,4 @@ new file=nouveau fichier
 remove=supprimer
 rename=renommer
 unknown=inconnu
+listing files=liste les fichiers

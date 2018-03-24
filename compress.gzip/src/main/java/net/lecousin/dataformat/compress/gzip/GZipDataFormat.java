@@ -80,9 +80,9 @@ public class GZipDataFormat extends CompressedDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<Data, Exception> getCompressedData(Data data) {
+	public AsyncWork<Data, Exception> getWrappedData(Data data, WorkProgress progress, long work) {
 		AsyncWork<Data, Exception> result = new AsyncWork<>();
-		cache.open(data, this, Task.PRIORITY_NORMAL, null, 0).listenInline((res) -> {
+		cache.open(data, this, Task.PRIORITY_NORMAL, progress, work).listenInline((res) -> {
 			result.unblockSuccess(new GZippedData(data, res.get()));
 			res.release(GZipDataFormat.this);
 		}, result);

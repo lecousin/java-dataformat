@@ -4,9 +4,9 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 
+import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.framework.collections.AsyncCollection;
@@ -19,7 +19,7 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class ELFDataFormat implements DataFormat.DataContainerFlat {
+public class ELFDataFormat implements ContainerDataFormat {
 	
 	public static final ELFDataFormat instance = new ELFDataFormat();
 	

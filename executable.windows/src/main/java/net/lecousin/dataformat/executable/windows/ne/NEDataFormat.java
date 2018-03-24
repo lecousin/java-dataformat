@@ -5,10 +5,10 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
 import net.lecousin.dataformat.executable.windows.msdos.MZDataFormat;
-import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class NEDataFormat extends MZDataFormat {
@@ -43,9 +43,9 @@ public class NEDataFormat extends MZDataFormat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		// TODO
-		list.done();
+	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+		progress.progress(work);
+		return new AsyncWork<>(null, null);
 	}
 	
 	@Override

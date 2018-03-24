@@ -1,5 +1,6 @@
 package net.lecousin.dataformat.image;
 
+import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -9,7 +10,7 @@ public abstract class ImageDataFormat implements DataFormat {
 	@Override
 	public IconProvider getIconProvider() { return iconProvider; }
 	
-	public static abstract class Multiple extends ImageDataFormat implements DataFormat.DataContainerFlat {
+	public static abstract class Multiple extends ImageDataFormat implements ContainerDataFormat {
 		
 	}
 	

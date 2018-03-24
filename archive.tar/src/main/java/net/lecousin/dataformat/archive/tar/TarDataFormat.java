@@ -2,30 +2,29 @@ package net.lecousin.dataformat.archive.tar;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedList;
 
 import net.lecousin.dataformat.archive.ArchiveDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.SubData;
+import net.lecousin.dataformat.core.hierarchy.DirectoryData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.application.LCCore;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.event.Listener;
-import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 
-public class TarDataFormat extends ArchiveDataFormat implements DataFormat.DataContainerHierarchy {
+public class TarDataFormat extends ArchiveDataFormat {
 
 	public static final TarDataFormat instance = new TarDataFormat();
 	
@@ -114,139 +113,77 @@ public class TarDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 		return info;
 	}
 
-	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<TarFile>,Exception> get = cache.open(data, this, Task.PRIORITY_IMPORTANT, null, 0);
-		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Loading Tar", Task.PRIORITY_IMPORTANT) {
-			@Override
-			public Void run() {
-				if (!get.isSuccessful()) {
-					list.done();
-					getApplication().getDefaultLogger().error("Error opening TAR file", get.getError());
-					return null;
-				}
-				CachedObject<TarFile> tar = get.getResult();
-				try {
-					Collection<TarEntry> files = tar.get().getEntries();
-					ArrayList<Data> dataList = new ArrayList<>(files.size());
-					for (TarEntry f : files) {
-						String p = f.getPath();
-						int i = p.lastIndexOf('/');
-						if (i < 0) p = null;
-						else p = p.substring(0, i);
-						dataList.add(new SubData(data, f.getPosition(), f.getDataSize(), f.getName(), p));
-					}
-					list.newElements(dataList);
-					list.done();
-					return null;
-				} finally {
-					tar.release(TarDataFormat.this);
-				}
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		Data tarData = container;
+		while (tarData instanceof DirectoryData)
+			tarData = ((DirectoryData)tarData).getContainer();
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading tar content");
+		AsyncWork<CachedObject<TarFile>,Exception> getCache = cache.open(tarData, this, Task.PRIORITY_IMPORTANT, progress, 800);
+		Data tar = tarData;
+		new Task.Cpu.FromRunnable("List zip content", Task.PRIORITY_IMPORTANT, () -> {
+			if (getCache.hasError()) {
+				listener.error(getCache.getError());
+				progress.error(getCache.getError());
+				LCCore.getApplication().getDefaultLogger().error("Error opening TAR file", getCache.getError());
+				return;
 			}
-		};
-		task.startOn(get, true);
-	}
-	
-	private static class TarDirectory implements Directory {
-		private TarDirectory(String path, Data tar) {
-			this.path = path;
-			this.tar = tar;
-		}
-		private String path;
-		private Data tar;
-		@Override
-		public String getName() {
-			int i = path.lastIndexOf('/');
-			if (i < 0) return path;
-			return path.substring(i+1);
-		}
-		@Override
-		public Data getContainerData() {
-			return tar;
-		}
+			if (getCache.isCancelled()) {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				return;
+			}
+			listSubData(tar, container, listener, getCache.getResult().get(), progress);
+			getCache.getResult().release(TarDataFormat.this);
+		}).startOn(getCache, true);
+		return progress;
 	}
 	
 	@Override
-	public void getSubDirectories(Data data, Directory parent, AsyncCollection<Directory> list) {
-		getSubData(data, new AsyncCollection<Data>() {
-			@Override
-			public void newElements(Collection<Data> elements) {
-				Set<String> names = new HashSet<String>();
-				String p;
-				if (parent == null) {
-					// root directories
-					p = "";
-					for (Data file : elements) {
-						String path = ((SubData)file).getDirectoryPath();
-						if (path == null) continue;
-						int i = path.indexOf('/');
-						if (i < 0) names.add(path);
-						else names.add(path.substring(0, i));
-					}
-				} else {
-					p = ((TarDirectory)parent).path+'/';
-					for (Data file : elements) {
-						String path = ((SubData)file).getDirectoryPath();
-						if (path == null) continue;
-						if (!path.startsWith(p)) continue;
-						if (path.equals(p)) continue;
-						int i = path.indexOf('/', p.length());
-						if (i < 0) names.add(path.substring(p.length()));
-						else names.add(path.substring(p.length(), i));
-					}
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
+	}
+	
+	private void listSubData(Data tarData, Data container, CollectionListener<Data> listener, TarFile tar, WorkProgress progress) {
+		String path;
+		if (container instanceof DirectoryData) {
+			path = container.getName() + '/';
+			Data parent = container.getContainer();
+			while (parent instanceof DirectoryData) {
+				path = parent.getName() + '/' + path;
+				parent = parent.getContainer();
+			}
+		} else
+			path = "";
+		LinkedList<Data> content = new LinkedList<>();
+		for (TarEntry f : tar.getEntries()) {
+			String name = f.getPath();
+			boolean dir = false;
+			if (name.endsWith("/")) {
+				// directory
+				name = name.substring(0, name.length() - 1);
+				dir = true;
+			}
+			int i = name.lastIndexOf('/');
+			if (i < 0) {
+				if (path.length() == 0) {
+					if (dir)
+						content.add(new DirectoryData(container, this, name));
+					else
+						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), null));
 				}
-				ArrayList<Directory> dirs = new ArrayList<>(names.size());
-				for (String name : names) dirs.add(new TarDirectory(p+name, data));
-				list.newElements(dirs);
+			} else {
+				if (name.substring(0, i + 1).equals(path)) {
+					if (dir)
+						content.add(new DirectoryData(container, this, name.substring(i + 1)));
+					else
+						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), name.substring(0, i)));
+				}
 			}
-			@Override
-			public void done() {
-				list.done();
-			}
-			@Override
-			public boolean isDone() {
-				return list.isDone();
-			}
-		});
+		}
+		listener.elementsReady(content);
+		progress.done();
 	}
 
-	@Override
-	public void getSubData(Data data, Directory parent, AsyncCollection<Data> list) {
-		getSubData(data, new AsyncCollection<Data>() {
-			@Override
-			public void newElements(Collection<Data> elements) {
-				ArrayList<Data> files = new ArrayList<>();
-				String p = parent != null ? ((TarDirectory)parent).path : null;
-				for (Data file : elements) {
-					String path = ((SubData)file).getDirectoryPath();
-					if (p != null) {
-						if (path == null) continue;
-						if (!path.equals(p)) continue;
-						files.add(file);
-					} else {
-						if (path != null) continue;
-						files.add(file);
-					}
-				}
-				list.newElements(files);
-			}
-			@Override
-			public void done() {
-				list.done();
-			}
-			@Override
-			public boolean isDone() {
-				return list.isDone();
-			}
-		});
-	}
-	
-	@Override
-	public String getSubDataPathSeparator() {
-		return "/";
-	}
-	
 	@Override
 	public Class<DataCommonProperties> getSubDataCommonProperties() {
 		return null; // TODO

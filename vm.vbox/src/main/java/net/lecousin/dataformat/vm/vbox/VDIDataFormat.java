@@ -1,13 +1,11 @@
 package net.lecousin.dataformat.vm.vbox;
 
 import java.io.IOException;
-import java.util.Collections;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
+import net.lecousin.dataformat.core.DataWrapperDataFormat;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
@@ -18,7 +16,7 @@ import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class VDIDataFormat implements DataFormat.DataContainerFlat {
+public class VDIDataFormat implements DataWrapperDataFormat {
 
 	public static final VDIDataFormat instance = new VDIDataFormat();
 	
@@ -106,17 +104,14 @@ public class VDIDataFormat implements DataFormat.DataContainerFlat {
 	}
 
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(data, this, Task.PRIORITY_NORMAL, null, 0);
+	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+		AsyncWork<Data, Exception> result = new AsyncWork<>();
+		AsyncWork<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(container, this, Task.PRIORITY_NORMAL, progress, work);
 		get.listenInline(() -> {
-			if (!get.isSuccessful()) {
-				list.done();
-				return;
-			}
-			list.newElements(Collections.singletonList(new VDIContentData(data, get.getResult().get())));
-			list.done();
+			result.unblockSuccess(new VDIContentData(container, get.getResult().get()));
 			get.getResult().release(VDIDataFormat.this);
-		});
+		}, result);
+		return result;
 	}
 
 	@Override

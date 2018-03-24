@@ -2,6 +2,7 @@ package net.lecousin.dataformat.filesystem.ext;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -116,6 +117,29 @@ public class ExtFS {
 		for (int i = 0; i < 15; ++i)
 			inode.blocks[i] = DataUtil.readUnsignedIntegerLittleEndian(buf, off+0x28+i*4);
 		return inode;
+	}
+	
+	public AsyncWork<ExtDirectory, IOException> loadDirectory(List<String> path) {
+		AsyncWork<ExtDirectory, IOException> result = new AsyncWork<>();
+		loadDirectory(getRoot(), path, 0, result);
+		return result;
+	}
+	
+	private void loadDirectory(ExtDirectory parent, List<String> path, int pathIndex, AsyncWork<ExtDirectory, IOException> result) {
+		parent.entries.listenInline((entries) -> {
+			String name = path.get(pathIndex);
+			for (ExtFSEntry entry : entries) {
+				if (!(entry instanceof ExtDirectory)) continue;
+				if (!name.equals(entry.getName())) continue;
+				if (pathIndex == path.size() - 1) {
+					result.unblockSuccess((ExtDirectory)entry);
+					return;
+				}
+				loadDirectory((ExtDirectory)entry, path, pathIndex + 1, result);
+				return;
+			}
+			result.unblockError(new IOException("Directory does not exist"));
+		}, result);
 	}
 	
 }

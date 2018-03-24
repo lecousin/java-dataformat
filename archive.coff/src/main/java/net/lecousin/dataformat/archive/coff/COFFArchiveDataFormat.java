@@ -9,7 +9,8 @@ import net.lecousin.dataformat.archive.coff.COFFArchive.COFFFile;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.application.LCCore;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -20,6 +21,7 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 
 public class COFFArchiveDataFormat extends ArchiveDataFormat {
 
@@ -102,34 +104,41 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		cache.open(data, COFFArchiveDataFormat.this, Task.PRIORITY_NORMAL, null, 0).listenInline(new AsyncWorkListener<CachedObject<COFFArchive>, Exception>() {
-			@Override
-			public void ready(CachedObject<COFFArchive> cache) {
-				COFFArchive archive = cache.get();
-				if (archive == null) {
-					COFFArchive.logger.error("Unable to read COFF Archive");
-					list.done();
-					cache.release(COFFArchiveDataFormat.this);
-					return;
-				}
-				ArrayList<Data> files = new ArrayList<>(archive.getContent().size());
-				for (COFFFile file : archive.getContent())
-					files.add(new COFFArchiveSubData(data, file));
-				list.newElements(files);
-				list.done();
-				cache.release(COFFArchiveDataFormat.this);
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading COFF archive");
+		AsyncWork<CachedObject<COFFArchive>, Exception> get = cache.open(container, COFFArchiveDataFormat.this, Task.PRIORITY_NORMAL, progress, 800);
+		new Task.Cpu.FromRunnable("Loading COFF", Task.PRIORITY_IMPORTANT, () -> {
+			if (get.hasError()) {
+				listener.error(get.getError());
+				progress.error(get.getError());
+				LCCore.getApplication().getDefaultLogger().error("Error opening COFF archive", get.getError());
+				return;
 			}
-			@Override
-			public void error(Exception error) {
-				COFFArchive.logger.error("Unable to read COFF Archive", error);
-				list.done();
+			if (get.isCancelled()) {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				return;
 			}
-			@Override
-			public void cancelled(CancelException event) {
-				list.done();
+			COFFArchive archive = get.getResult().get();
+			if (archive == null) {
+				COFFArchive.logger.error("Unable to read COFF Archive");
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				get.getResult().release(COFFArchiveDataFormat.this);
+				return;
 			}
-		});
+			ArrayList<Data> files = new ArrayList<>(archive.getContent().size());
+			for (COFFFile file : archive.getContent())
+				files.add(new COFFArchiveSubData(container, file));
+			listener.elementsReady(files);
+			progress.done();
+			get.getResult().release(COFFArchiveDataFormat.this);
+		}).startOn(get, true);
+		return progress;
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 
 	@Override

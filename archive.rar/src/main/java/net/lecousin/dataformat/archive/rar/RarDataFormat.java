@@ -8,19 +8,20 @@ import net.lecousin.dataformat.archive.ArchiveDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.application.LCCore;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.event.Listener;
-import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class RarDataFormat extends ArchiveDataFormat {
@@ -111,33 +112,39 @@ public class RarDataFormat extends ArchiveDataFormat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<RarArchive>,Exception> get = cache.open(data, this, Task.PRIORITY_IMPORTANT, null, 0);
-		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Loading Rar", Task.PRIORITY_IMPORTANT) {
-			@Override
-			public Void run() {
-				if (!get.isSuccessful()) {
-					list.done();
-					getApplication().getDefaultLogger().error("Error opening RAR file", get.getError());
-					return null;
-				}
-				CachedObject<RarArchive> rar = get.getResult();
-				try {
-					Collection<RarArchive.RARFile> files = rar.get().getContent();
-					ArrayList<Data> dataList = new ArrayList<>(files.size());
-					for (RarArchive.RARFile f : files)
-						dataList.add(new RarFileData(data, f));
-					list.newElements(dataList);
-					list.done();
-					return null;
-				} finally {
-					rar.release(RarDataFormat.this);
-				}
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading RAR");
+		AsyncWork<CachedObject<RarArchive>,Exception> get = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 800);
+		new Task.Cpu.FromRunnable("Loading Rar", Task.PRIORITY_IMPORTANT, () -> {
+			if (get.hasError()) {
+				listener.error(get.getError());
+				progress.error(get.getError());
+				LCCore.getApplication().getDefaultLogger().error("Error opening RAR file", get.getError());
+				return;
 			}
-		};
-		task.startOn(get, true);
+			if (get.isCancelled()) {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				return;
+			}
+			CachedObject<RarArchive> rar = get.getResult();
+			try {
+				Collection<RarArchive.RARFile> files = rar.get().getContent();
+				ArrayList<Data> dataList = new ArrayList<>(files.size());
+				for (RarArchive.RARFile f : files)
+					dataList.add(new RarFileData(container, f));
+				listener.elementsReady(dataList);
+				progress.done();
+			} finally {
+				rar.release(RarDataFormat.this);
+			}
+		}).startOn(get, true);
+		return progress;
 	}
 	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
+	}
 	
 	@Override
 	public Class<DataCommonProperties> getSubDataCommonProperties() {

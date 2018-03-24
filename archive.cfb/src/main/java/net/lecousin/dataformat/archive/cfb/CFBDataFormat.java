@@ -10,19 +10,20 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.application.LCCore;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.event.Listener;
-import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 
 public class CFBDataFormat extends ArchiveDataFormat {
 
@@ -120,42 +121,50 @@ public class CFBDataFormat extends ArchiveDataFormat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<CFBFile>,Exception> get = cache.open(data, this, Task.PRIORITY_IMPORTANT/*, true*/, null, 0);
-		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Loading CFB", Task.PRIORITY_IMPORTANT) {
-			@Override
-			public Void run() {
-				if (!get.isSuccessful()) {
-					list.done();
-					getApplication().getDefaultLogger().error("Error opening CFB File", get.getError());
-					return null;
-				}
-				CachedObject<CFBFile> cfb = get.getResult();
-				cfb.get().getSynchOnReady().listenInline(new Runnable() {
-					@Override
-					public void run() {
-						if (cfb.get().getSynchOnReady().hasError()) {
-							CFBFile.logger.error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
-							list.done();
-							cfb.release(CFBDataFormat.this);
-							return;
-						}
-						try {
-							ArrayList<CFBSubFile> files = cfb.get().getContent();
-							ArrayList<Data> dataList = new ArrayList<>(files.size());
-							for (CFBSubFile f : files)
-								dataList.add(new CFBSubFileData(data, f));
-							list.newElements(dataList);
-							list.done();
-						} finally {
-							cfb.release(CFBDataFormat.this);
-						}
-					}
-				});
-				return null;
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading CFB file");
+		AsyncWork<CachedObject<CFBFile>,Exception> get = cache.open(container, this, Task.PRIORITY_IMPORTANT/*, true*/, progress, 800);
+		new Task.Cpu.FromRunnable("Loading CFB", Task.PRIORITY_IMPORTANT, () -> {
+			if (get.hasError()) {
+				listener.error(get.getError());
+				progress.error(get.getError());
+				LCCore.getApplication().getDefaultLogger().error("Error opening CFB file", get.getError());
+				return;
 			}
-		};
-		task.startOn(get, true);
+			if (get.isCancelled()) {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				return;
+			}
+			CachedObject<CFBFile> cfb = get.getResult();
+			cfb.get().getSynchOnReady().listenInline(new Runnable() {
+				@Override
+				public void run() {
+					if (cfb.get().getSynchOnReady().hasError()) {
+						CFBFile.logger.error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
+						listener.error(cfb.get().getSynchOnReady().getError());
+						progress.error(cfb.get().getSynchOnReady().getError());
+						cfb.release(CFBDataFormat.this);
+						return;
+					}
+					try {
+						ArrayList<CFBSubFile> files = cfb.get().getContent();
+						ArrayList<Data> dataList = new ArrayList<>(files.size());
+						for (CFBSubFile f : files)
+							dataList.add(new CFBSubFileData(container, f));
+						listener.elementsReady(dataList);
+						progress.done();
+					} finally {
+						cfb.release(CFBDataFormat.this);
+					}
+				}
+			});
+		}).startOn(get, true);
+		return progress;
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 	
 	@Override

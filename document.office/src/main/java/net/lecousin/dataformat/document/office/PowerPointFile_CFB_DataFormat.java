@@ -12,7 +12,7 @@ import net.lecousin.dataformat.microsoft.ole.OLEPropertySetStream;
 import net.lecousin.dataformat.microsoft.ole.OLEPropertySets;
 import net.lecousin.dataformat.microsoft.ole.SummaryInformation;
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -63,9 +63,9 @@ public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 				sp.unblockSuccess(info);
 			}
 		});
-		CFBDataFormat.instance.getSubData(data, new AsyncCollection<Data>() {
+		CollectionListener<Data> listener = new CollectionListener<Data>() {
 			@Override
-			public void newElements(Collection<Data> elements) {
+			public void elementsReady(Collection<? extends Data> elements) {
 				for (Data file : elements) {
 					if (sp.isCancelled()) return;
 					String name = file.getName();
@@ -128,18 +128,28 @@ public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 					}
 
 				}
-			}
-			private boolean done = false;
-			@Override
-			public void done() {
-				done = true;
+				CFBDataFormat.instance.unlistenSubData(data, this);
 				jp.joined();
 			}
+
 			@Override
-			public boolean isDone() {
-				return done;
+			public void elementsAdded(Collection<? extends Data> elements) {
 			}
-		});
+
+			@Override
+			public void elementsRemoved(Collection<? extends Data> elements) {
+			}
+
+			@Override
+			public void elementsChanged(Collection<? extends Data> elements) {
+			}
+
+			@Override
+			public void error(Throwable error) {
+				jp.joined();
+			}
+		};
+		CFBDataFormat.instance.listenSubData(data, listener);
 		sp.onCancel(new Listener<CancelException>() {
 			@Override
 			public void fire(CancelException event) {

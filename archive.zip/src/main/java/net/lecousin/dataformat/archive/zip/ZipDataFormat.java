@@ -2,30 +2,28 @@ package net.lecousin.dataformat.archive.zip;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.LinkedList;
 
 import net.lecousin.dataformat.archive.ArchiveDataFormat;
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.dataformat.core.DataFormat;
+import net.lecousin.dataformat.core.hierarchy.DirectoryData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.event.Listener;
-import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class ZipDataFormat extends ArchiveDataFormat implements DataFormat.DataContainerHierarchy {
+public class ZipDataFormat extends ArchiveDataFormat {
 
 	public static ZipDataFormat instance = new ZipDataFormat();
 	
@@ -118,130 +116,67 @@ public class ZipDataFormat extends ArchiveDataFormat implements DataFormat.DataC
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<ZipArchive>,Exception> get = cache.open(data, this, Task.PRIORITY_IMPORTANT, null, 0);
-		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Loading Zip", Task.PRIORITY_IMPORTANT) {
-			@Override
-			public Void run() {
-				if (!get.isSuccessful()) {
-					list.done();
-					LCCore.getApplication().getDefaultLogger().error("Error opening ZIP file", get.getError());
-					return null;
-				}
-				CachedObject<ZipArchive> zip = get.getResult();
-				try {
-					Collection<ZipArchive.ZippedFile> files = zip.get().getZippedFiles();
-					ArrayList<Data> dataList = new ArrayList<>(files.size());
-					for (ZipArchive.ZippedFile f : files)
-						dataList.add(new ZipFileData(data, f));
-					list.newElements(dataList);
-					list.done();
-					return null;
-				} finally {
-					zip.release(ZipDataFormat.this);
-				}
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		Data zipData = container;
+		while (zipData instanceof DirectoryData)
+			zipData = ((DirectoryData)zipData).getContainer();
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading zip content");
+		AsyncWork<CachedObject<ZipArchive>,Exception> getCache = cache.open(zipData, this, Task.PRIORITY_IMPORTANT, progress, 800);
+		Data zip = zipData;
+		new Task.Cpu.FromRunnable("List zip content", Task.PRIORITY_IMPORTANT, () -> {
+			if (getCache.hasError()) {
+				listener.error(getCache.getError());
+				progress.error(getCache.getError());
+				LCCore.getApplication().getDefaultLogger().error("Error opening ZIP file", getCache.getError());
+				return;
 			}
-		};
-		task.startOn(get, true);
-	}
-	
-	private static class ZipDirectory implements Directory {
-		private ZipDirectory(String path, Data zip) {
-			this.path = path;
-			this.zip = zip;
-		}
-		private String path;
-		private Data zip;
-		@Override
-		public String getName() {
-			int i = path.lastIndexOf('/');
-			if (i < 0) return path;
-			return path.substring(i+1);
-		}
-		@Override
-		public Data getContainerData() {
-			return zip;
-		}
+			if (getCache.isCancelled()) {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+				return;
+			}
+			listSubData(zip, container, listener, getCache.getResult().get(), progress);
+			getCache.getResult().release(ZipDataFormat.this);
+		}).startOn(getCache, true);
+		return progress;
 	}
 	
 	@Override
-	public void getSubDirectories(Data data, Directory parent, AsyncCollection<Directory> list) {
-		getSubData(data, new AsyncCollection<Data>() {
-			@Override
-			public void newElements(Collection<Data> elements) {
-				Set<String> names = new HashSet<String>();
-				String p;
-				if (parent == null) {
-					// root directories
-					p = "";
-					for (Data file : elements) {
-						String name = file.getName();
-						int i = name.indexOf('/');
-						if (i < 0) continue;
-						names.add(name.substring(0,i));
-					}
-				} else {
-					p = ((ZipDirectory)parent).path+'/';
-					for (Data file : elements) {
-						String name = file.getName();
-						if (!name.startsWith(p)) continue;
-						if (name.equals(p)) continue;
-						int i = name.indexOf('/', p.length());
-						if (i < 0) continue;
-						names.add(name.substring(p.length(), i));
-					}
-				}
-				ArrayList<Directory> dirs = new ArrayList<>(names.size());
-				for (String name : names) dirs.add(new ZipDirectory(p+name, data));
-				list.newElements(dirs);
-			}
-			@Override
-			public void done() {
-				list.done();
-			}
-			@Override
-			public boolean isDone() {
-				return list.isDone();
-			}
-		});
-	}
-
-	@Override
-	public void getSubData(Data data, Directory parent, AsyncCollection<Data> list) {
-		getSubData(data, new AsyncCollection<Data>() {
-			@Override
-			public void newElements(Collection<Data> elements) {
-				ArrayList<Data> files = new ArrayList<>();
-				String p = parent != null ? ((ZipDirectory)parent).path+'/' : null;
-				for (Data file : elements) {
-					String name = file.getName();
-					if (p != null) {
-						if (!name.startsWith(p)) continue;
-						if (name.equals(p)) continue;
-						int i = name.indexOf('/', p.length());
-						if (i >= 0) continue;
-						files.add(new ZipFileData.InDirectory((ZipFileData)file));
-					} else {
-						if (name.indexOf('/') >= 0) continue;
-						files.add(new ZipFileData.InDirectory((ZipFileData)file));
-					}
-				}
-				list.newElements(files);
-			}
-			@Override
-			public void done() {
-				list.done();
-			}
-			@Override
-			public boolean isDone() {
-				return list.isDone();
-			}
-		});
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 	
-	@Override
-	public String getSubDataPathSeparator() {
-		return "/";
+	private void listSubData(Data zipData, Data container, CollectionListener<Data> listener, ZipArchive zip, WorkProgress progress) {
+		String path;
+		if (container instanceof DirectoryData) {
+			path = container.getName() + '/';
+			Data parent = container.getContainer();
+			while (parent instanceof DirectoryData) {
+				path = parent.getName() + '/' + path;
+				parent = parent.getContainer();
+			}
+		} else
+			path = "";
+		LinkedList<Data> content = new LinkedList<>();
+		for (ZipArchive.ZippedFile f : zip.getZippedFiles()) {
+			String name = f.filename;
+			boolean dir = false;
+			if (name.endsWith("/")) {
+				// directory
+				name = name.substring(0, name.length() - 1);
+				dir = true;
+			}
+			int i = name.lastIndexOf('/');
+			if (i < 0) {
+				if (path.length() == 0)
+					content.add(dir ? new DirectoryData(container, this, name) : new ZipFileData(zipData, f));
+			} else {
+				if (name.substring(0, i + 1).equals(path)) {
+					content.add(dir ? new DirectoryData(container, this, name.substring(i + 1)) : new ZipFileData(zipData, f));
+				}
+			}
+		}
+		listener.elementsReady(content);
+		progress.done();
 	}
 	
 	@Override

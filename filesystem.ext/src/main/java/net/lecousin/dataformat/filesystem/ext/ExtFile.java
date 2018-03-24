@@ -12,9 +12,4 @@ public class ExtFile extends ExtFSEntry {
 		super(parent, name, inode);
 	}
 	
-	public long getSize() throws Exception {
-		INode inode = loadINode().blockResult(0);
-		return inode.size;
-	}
-	
 }
