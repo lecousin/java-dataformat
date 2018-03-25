@@ -1,4 +1,4 @@
-package net.lecousin.dataformat.mbr;
+package net.lecousin.dataformat.filesystem;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;

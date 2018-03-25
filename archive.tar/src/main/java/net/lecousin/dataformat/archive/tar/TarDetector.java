@@ -40,10 +40,18 @@ public class TarDetector implements DataFormatDetector.OnlyHeaderNeeded {
 			if (header[i] == '*' || header[i] == '?') return null;
 		}
 		// check numeric fields in octal base
-		for (int i = 124; i < 124+11; ++i)
+		boolean headingSpace = true;
+		for (int i = 124; i < 124+11; ++i) {
+			if (headingSpace && header[i] == 0x20) continue;
+			headingSpace = false;
 			if (header[i] < '0' || header[i] > '7') return null;
-		for (int i = 136; i < 136+11; ++i)
+		}
+		headingSpace = true;
+		for (int i = 136; i < 136+11; ++i) {
+			if (headingSpace && header[i] == 0x20) continue;
+			headingSpace = false;
 			if (header[i] < '0' || header[i] > '7') return null;
+		}
 		// enough to say it is a TAR file
 		return TarDataFormat.instance;
 	}

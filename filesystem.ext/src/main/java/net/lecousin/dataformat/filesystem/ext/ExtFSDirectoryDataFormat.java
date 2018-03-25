@@ -11,7 +11,7 @@ import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class ExtFSDirectoryDataFormat implements ContainerDataFormat {
+public class ExtFSDirectoryDataFormat implements ContainerDataFormat.ContainerDirectory {
 
 	public static final ExtFSDirectoryDataFormat instance = new ExtFSDirectoryDataFormat();
 	

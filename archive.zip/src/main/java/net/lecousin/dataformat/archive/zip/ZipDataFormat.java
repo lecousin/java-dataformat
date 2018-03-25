@@ -157,6 +157,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 		} else
 			path = "";
 		LinkedList<Data> content = new LinkedList<>();
+		ArrayList<String> dirs = new ArrayList<>();
 		for (ZipArchive.ZippedFile f : zip.getZippedFiles()) {
 			String name = f.filename;
 			boolean dir = false;
@@ -167,11 +168,49 @@ public class ZipDataFormat extends ArchiveDataFormat {
 			}
 			int i = name.lastIndexOf('/');
 			if (i < 0) {
-				if (path.length() == 0)
-					content.add(dir ? new DirectoryData(container, this, name) : new ZipFileData(zipData, f));
-			} else {
-				if (name.substring(0, i + 1).equals(path)) {
-					content.add(dir ? new DirectoryData(container, this, name.substring(i + 1)) : new ZipFileData(zipData, f));
+				if (path.length() == 0) {
+					if (dir) {
+						if (!dirs.contains(name)) {
+							content.add(new DirectoryData(container, this, name));
+							dirs.add(name);
+						}
+					} else {
+						content.add(new ZipFileData(zipData, f));
+					}
+				}
+				continue;
+			}
+			String p = name.substring(0, i + 1);
+			name = name.substring(i + 1);
+			if (p.equals(path)) {
+				if (dir) {
+					if (!dirs.contains(name)) {
+						content.add(new DirectoryData(container, this, name));
+						dirs.add(name);
+					}
+				} else {
+					content.add(new ZipFileData(zipData, f));
+				}
+				continue;
+			}
+			if (path.length() == 0) {
+				i = p.indexOf('/');
+				name = p.substring(0, i);
+				if (!dirs.contains(name)) {
+					content.add(new DirectoryData(container, this, name));
+					dirs.add(name);
+				}
+				continue;
+			}
+			if (p.startsWith(path + '/')) {
+				p = p.substring(path.length() + 1);
+				i = p.indexOf('/');
+				if (i > 0) {
+					name = p.substring(0, i);
+					if (!dirs.contains(name)) {
+						content.add(new DirectoryData(container, this, name));
+						dirs.add(name);
+					}
 				}
 			}
 		}
@@ -186,19 +225,18 @@ public class ZipDataFormat extends ArchiveDataFormat {
 	
 	@Override
 	public ZipFileDataCommonProperties getSubDataCommonProperties(Data subData) {
-		ZipFileDataCommonProperties props = new ZipFileDataCommonProperties();
-		ZipFileData zip;
-		if (subData instanceof ZipFileData)
-			zip = (ZipFileData)subData;
-		else
-			zip = ((ZipFileData.InDirectory)subData).data;
-		if (zip.file.lastModificationTimestamp > 0)
-			props.lastModificationTimestamp = new Long(zip.file.lastModificationTimestamp);
-		if (zip.file.lastAccessTimestamp > 0)
-			props.lastAccessTimestamp = new Long(zip.file.lastAccessTimestamp);
-		if (zip.file.creationTimestamp > 0)
-			props.creationTimestamp = new Long(zip.file.creationTimestamp);
-		return props;
+		if (subData instanceof ZipFileData) {
+			ZipFileData zip = (ZipFileData)subData;
+			ZipFileDataCommonProperties props = new ZipFileDataCommonProperties();
+			if (zip.file.lastModificationTimestamp > 0)
+				props.lastModificationTimestamp = new Long(zip.file.lastModificationTimestamp);
+			if (zip.file.lastAccessTimestamp > 0)
+				props.lastAccessTimestamp = new Long(zip.file.lastAccessTimestamp);
+			if (zip.file.creationTimestamp > 0)
+				props.creationTimestamp = new Long(zip.file.creationTimestamp);
+			return props;
+		}
+		return null;
 	}
 
 }

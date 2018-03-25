@@ -1,16 +1,16 @@
-package net.lecousin.dataformat.mbr;
+package net.lecousin.dataformat.filesystem;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
+import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
@@ -18,11 +18,12 @@ import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.system.hardware.DiskPartition;
 import net.lecousin.framework.system.hardware.DiskPartitionsUtil;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class MBRDataFormat implements DataFormat.DataContainerFlat {
+public class MBRDataFormat implements ContainerDataFormat {
 
 	public static final MBRDataFormat instance = new MBRDataFormat();
 	
@@ -34,7 +35,7 @@ public class MBRDataFormat implements DataFormat.DataContainerFlat {
 		return new FixedLocalizedString("Disk");
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.mbr/images/drive_harddisk_", ".png", 16, 24, 32, 48, 64);
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.filesystem/images/drive_harddisk_", ".png", 16, 24, 32, 48, 64);
 	
 	@Override
 	public IconProvider getIconProvider() {
@@ -107,24 +108,37 @@ public class MBRDataFormat implements DataFormat.DataContainerFlat {
 	};
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		cache.open(data, this, Task.PRIORITY_NORMAL, null, 0).listenInline(
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading partition table");
+		cache.open(container, this, Task.PRIORITY_NORMAL, progress, 800).listenInline(
 			(res) -> {
 				if (res == null) {
-					list.done();
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
 					return;
 				}
 				List<Data> l = new ArrayList<>();
 				for (Partitions.Partition p : res.get().list)
 					if (p.data != null)
 						l.add(p.data);
-				list.newElements(l);
-				list.done();
+				listener.elementsReady(l);
+				progress.done();
 				res.release(MBRDataFormat.this);
 			},
-			(error) -> { list.done(); },
-			(cancel) -> { list.done(); }
+			(error) -> {
+				listener.error(error);
+				progress.error(error);
+			},
+			(cancel) -> {
+				listener.elementsReady(new ArrayList<>(0));
+				progress.done();
+			}
 		);
+		return progress;
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 
 	@Override

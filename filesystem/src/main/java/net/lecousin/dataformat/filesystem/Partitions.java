@@ -1,4 +1,4 @@
-package net.lecousin.dataformat.mbr;
+package net.lecousin.dataformat.filesystem;
 
 import java.util.ArrayList;
 import java.util.List;

@@ -126,7 +126,7 @@ public class ExtFS {
 	}
 	
 	private void loadDirectory(ExtDirectory parent, List<String> path, int pathIndex, AsyncWork<ExtDirectory, IOException> result) {
-		parent.entries.listenInline((entries) -> {
+		parent.getEntries().listenInline((entries) -> {
 			String name = path.get(pathIndex);
 			for (ExtFSEntry entry : entries) {
 				if (!(entry instanceof ExtDirectory)) continue;

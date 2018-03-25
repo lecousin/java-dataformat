@@ -19,61 +19,20 @@ public class ZipFileData extends Data {
 		this.file = file;
 	}
 	
-	static class InDirectory extends Data {
-		InDirectory(ZipFileData data) {
-			this.data = data;
-		}
-		ZipFileData data;
-		@Override
-		public String getName() {
-			String name = data.getName();
-			int i = name.lastIndexOf('/');
-			if (i < 0) return name;
-			return name.substring(i+1);
-		}
-		@Override
-		public String getDescription() {
-			return data.getDescription();
-		}
-		@Override
-		public long getSize() {
-			return data.getSize();
-		}
-		@Override
-		public boolean hasContent() {
-			return true;
-		}
-		@Override
-		public Data getContainer() {
-			return data.getContainer();
-		}
-		@Override
-		protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
-			return data.openIOReadOnly(priority);
-		}
-		
-		@Override
-		protected boolean canOpenReadWrite() {
-			return false;
-		}
-		
-		@Override
-		protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
-			return null;
-		}
-	}
-	
 	private Data zip;
 	ZippedFile file;
 	
 	@Override
 	public String getName() {
-		return file.getFilename();
+		String n = file.getFilename();
+		int i = n.lastIndexOf('/');
+		if (i < 0) return n;
+		return n.substring(i + 1);
 	}
 	
 	@Override
 	public String getDescription() {
-		return file.getComment();
+		return zip.getDescription() + '/' + file.getFilename();
 	}
 	
 	@Override

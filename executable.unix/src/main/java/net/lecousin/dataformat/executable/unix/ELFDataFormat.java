@@ -2,14 +2,15 @@ package net.lecousin.dataformat.executable.unix;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.ArrayList;
+import java.util.List;
 
 import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.exception.NoException;
@@ -17,6 +18,8 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class ELFDataFormat implements ContainerDataFormat {
@@ -55,31 +58,47 @@ public class ELFDataFormat implements ContainerDataFormat {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		ELFInfo info = (ELFInfo)data.getProperty(ELFInfo.PROPERTY_NAME);
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(Task.PRIORITY_NORMAL);
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(10000, "Reading ELF");
+		ELFInfo info = (ELFInfo)container.getProperty(ELFInfo.PROPERTY_NAME);
+		AsyncWork<? extends IO.Readable.Seekable,Exception> open = container.openReadOnly(Task.PRIORITY_NORMAL);
 		byte[] sectionEntryBuffer = new byte[info.sectionHeaderTableEntrySize];
 		open.listenInline(new Runnable() {
 			@Override
 			public void run() {
-				if (!open.isSuccessful()) {
-					list.done();
+				if (open.hasError()) {
+					listener.error(open.getError());
+					progress.error(open.getError());
 					return;
 				}
-				readNamesSection(data, open.getResult(), info, sectionEntryBuffer, list);
+				if (open.isCancelled()) {
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
+					return;
+				}
+				progress.progress(500);
+				readNamesSection(container, open.getResult(), info, sectionEntryBuffer, listener, progress);
 			}
 		});
+		return progress;
 	}
 
-	private static void readNamesSection(Data data, IO.Readable.Seekable io, ELFInfo info, byte[] sectionEntryBuffer, AsyncCollection<Data> list) {
+	private static void readNamesSection(Data data, IO.Readable.Seekable io, ELFInfo info, byte[] sectionEntryBuffer, CollectionListener<Data> listener, WorkProgress progress) {
 		AsyncWork<Integer,IOException> read = io.readAsync(info.sectionHeaderTableOffset+info.sectionNamesIndex*info.sectionHeaderTableEntrySize, ByteBuffer.wrap(sectionEntryBuffer));
 		read.listenAsync(new Task.Cpu<Void,NoException>("Read ELF names section", Task.PRIORITY_NORMAL) {
 			@Override
 			public Void run() {
-				if (!read.isSuccessful()) {
-					list.done();
+				if (read.hasError()) {
+					listener.error(read.getError());
+					progress.error(read.getError());
 					return null;
 				}
+				if (read.isCancelled()) {
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
+					return null;
+				}
+				progress.progress(250);
 				long offset = 0, size = 0;
 				switch (info.bits) {
 				case _32:
@@ -109,7 +128,8 @@ public class ELFDataFormat implements ContainerDataFormat {
 				}
 				if (size > 128*1024) {
 					// ????
-					list.done();
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
 					return null;
 				}
 				byte[] names = new byte[(int)size];
@@ -117,11 +137,18 @@ public class ELFDataFormat implements ContainerDataFormat {
 				readNames.listenInline(new Runnable() {
 					@Override
 					public void run() {
-						if (!readNames.isSuccessful()) {
-							list.done();
+						if (readNames.hasError()) {
+							listener.error(readNames.getError());
+							progress.error(readNames.getError());
 							return;
 						}
-						readSection(data, io, info, sectionEntryBuffer, 0, names, list);
+						if (readNames.isCancelled()) {
+							listener.elementsReady(new ArrayList<>(0));
+							progress.done();
+							return;
+						}
+						progress.progress(250);
+						readSection(data, io, info, sectionEntryBuffer, 0, names, listener, progress, 9000, new ArrayList<Data>(info.sectionHeaderTableNbEntries));
 					}
 				});
 				return null;
@@ -129,23 +156,32 @@ public class ELFDataFormat implements ContainerDataFormat {
 		}, true);
 	}
 	
-	private static void readSection(Data data, IO.Readable.Seekable io, ELFInfo info, byte[] sectionEntryBuffer, int sectionIndex, byte[] names, AsyncCollection<Data> list) {
+	private static void readSection(Data data, IO.Readable.Seekable io, ELFInfo info, byte[] sectionEntryBuffer, int sectionIndex, byte[] names, CollectionListener<Data> listener, WorkProgress progress, long work, List<Data> dataList) {
 		if (sectionIndex == info.sectionNamesIndex) {
-			readSection(data, io, info, sectionEntryBuffer, sectionIndex+1, names, list);
+			readSection(data, io, info, sectionEntryBuffer, sectionIndex+1, names, listener, progress, work, dataList);
 			return;
 		}
 		if (sectionIndex == info.sectionHeaderTableNbEntries) {
-			list.done();
+			listener.elementsReady(dataList);
+			progress.done();
 			return;
 		}
 		AsyncWork<Integer,IOException> read = io.readAsync(info.sectionHeaderTableOffset+sectionIndex*info.sectionHeaderTableEntrySize, ByteBuffer.wrap(sectionEntryBuffer));
 		read.listenAsync(new Task.Cpu<Void,NoException>("Read ELF section", Task.PRIORITY_NORMAL) {
 			@Override
 			public Void run() {
-				if (!read.isSuccessful()) {
-					list.done();
+				if (read.hasError()) {
+					listener.error(read.getError());
+					progress.error(read.getError());
 					return null;
 				}
+				if (read.isCancelled()) {
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
+					return null;
+				}
+				long step = work / (info.sectionHeaderTableNbEntries - sectionIndex);
+				progress.progress(step);
 				long nameOffset = 0, offset = 0, size = 0;
 				switch (info.bits) {
 				case _32:
@@ -186,11 +222,15 @@ public class ELFDataFormat implements ContainerDataFormat {
 						i++;
 					}
 				}
-				list.newElements(Collections.singletonList(new SubData(data, offset, size, name.toString())));
-				readSection(data, io, info, sectionEntryBuffer, sectionIndex+1, names, list);
+				dataList.add(new SubData(data, offset, size, name.toString()));
+				readSection(data, io, info, sectionEntryBuffer, sectionIndex+1, names, listener, progress, work - step, dataList);
 				return null;
 			}
 		}, true);
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 	
 	@Override

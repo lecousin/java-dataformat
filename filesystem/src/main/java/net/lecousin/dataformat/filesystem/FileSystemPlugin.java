@@ -12,12 +12,14 @@ public class FileSystemPlugin implements DataFormatPlugin {
 	@Override
 	public DataFormat[] getFormats() {
 		return new DataFormat[] {
+			MBRDataFormat.instance
 		};
 	}
 
 	@Override
 	public DataFormatDetector[] getDetectors() {
 		return new DataFormatDetector[] {
+			new MBRDetector()
 		};
 	}
 

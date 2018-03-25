@@ -135,13 +135,13 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	public WorkProgress listenDirectorySubData(ExtFSData container, CollectionListener<Data> listener) {
 		Data fsData = container;
 		LinkedList<String> path = new LinkedList<>();
-		while (fsData.getContainer().getDetectedFormat() != ExtFSDataFormat.instance) {
+		while (fsData.getDetectedFormat() != ExtFSDataFormat.instance) {
 			path.addFirst(fsData.getName());
 			fsData = fsData.getContainer();
 		}
 		
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading Ext File System");
-		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 500);
+		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(fsData, this, Task.PRIORITY_IMPORTANT, progress, 500);
 		new Task.Cpu.FromRunnable("Get Ext File System directory content", Task.PRIORITY_IMPORTANT, () -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());

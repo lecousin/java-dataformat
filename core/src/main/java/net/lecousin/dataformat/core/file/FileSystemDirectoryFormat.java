@@ -18,7 +18,7 @@ import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class FileSystemDirectoryFormat implements ContainerDataFormat {
+public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerDirectory {
 
 	public static final FileSystemDirectoryFormat instance = new FileSystemDirectoryFormat();
 	

@@ -15,7 +15,7 @@ import net.lecousin.dataformat.image.bmp.DIBReaderOp;
 import net.lecousin.dataformat.image.bmp.DIBReaderOp.DIBImageProvider;
 import net.lecousin.dataformat.image.bmp.io.DIBHeader;
 import net.lecousin.dataformat.image.bmp.io.DIBReader;
-import net.lecousin.framework.collections.AsyncCollection;
+import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.exception.NoException;
@@ -23,6 +23,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.progress.WorkProgressImpl;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -161,32 +162,44 @@ public abstract class ICOCURFormat extends ImageDataFormat.Multiple {
 	}
 	
 	@Override
-	public void populateSubData(Data data, AsyncCollection<Data> list) {
-		AsyncWork<CachedObject<ImageDirectory>,Exception> get = cache.open(data, this, Task.PRIORITY_IMPORTANT, null, 0);
+	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
+		WorkProgress progress = new WorkProgressImpl(1000, "Reading ICO/CUR");
+		AsyncWork<CachedObject<ImageDirectory>,Exception> get = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 800);
 		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Create sub-data from ico file", Task.PRIORITY_IMPORTANT) {
 			@Override
 			public Void run() {
+				if (get.hasError()) {
+					listener.error(get.getError());
+					progress.error(get.getError());
+					return null;
+				}
 				CachedObject<ImageDirectory> cache = get.getResult();
 				if (cache == null) {
-					list.done();
+					listener.elementsReady(new ArrayList<>(0));
+					progress.done();
 					return null;
 				}
 				ImageDirectory dir = cache.get();
 				int index = 1;
 				ArrayList<Data> subdata = new ArrayList<>(dir.images.size());
 				for (Image i : dir.images) {
-					SubData sb = new SubData(data, i.dataOffset, i.dataSize, "Icon " + (index++));
+					SubData sb = new SubData(container, i.dataOffset, i.dataSize, "Icon " + (index++));
 					subdata.add(sb);
 					sb.setProperty(IMAGE_PROPERTY, i);
 					sb.setProperty(DIBReaderOp.DIBImageProvider.DATA_PROPERTY, new ICOImageProvider(i.height));
 				}
-				list.newElements(subdata);
-				list.done();
+				listener.elementsReady(subdata);
+				progress.done();
 				cache.release(ICOCURFormat.this);
 				return null;
 			}
 		};
 		task.startOn(get, true);
+		return progress;
+	}
+	
+	@Override
+	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
 	}
 	
 	public static <T extends IO.Readable.Buffered & IO.Readable.Seekable> byte[] createBMPHeader(T dib, long dibSize, Image i) throws IOException {

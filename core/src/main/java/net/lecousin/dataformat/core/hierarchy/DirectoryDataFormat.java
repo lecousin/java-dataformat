@@ -11,7 +11,7 @@ import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
-public class DirectoryDataFormat  implements ContainerDataFormat {
+public class DirectoryDataFormat  implements ContainerDataFormat.ContainerDirectory {
 
 	public DirectoryDataFormat(ContainerDataFormat containerFormat) {
 		this.containerFormat = containerFormat;

@@ -16,6 +16,10 @@ public interface ContainerDataFormat extends DataFormat {
 	public Class<? extends DataCommonProperties> getSubDataCommonProperties();
 	
 	public DataCommonProperties getSubDataCommonProperties(Data subData);
+
+	/** Marker to signal this is a directory inside a hierarchy. */
+	public interface ContainerDirectory extends ContainerDataFormat {
+	}
 	
 	public interface CacheSubData {
 		

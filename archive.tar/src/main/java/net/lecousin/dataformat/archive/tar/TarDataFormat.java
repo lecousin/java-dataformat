@@ -155,28 +155,55 @@ public class TarDataFormat extends ArchiveDataFormat {
 		} else
 			path = "";
 		LinkedList<Data> content = new LinkedList<>();
+		ArrayList<String> dirs = new ArrayList<>();
 		for (TarEntry f : tar.getEntries()) {
 			String name = f.getPath();
-			boolean dir = false;
-			if (name.endsWith("/")) {
-				// directory
-				name = name.substring(0, name.length() - 1);
-				dir = true;
-			}
+			boolean dir = f.isDirectory();
 			int i = name.lastIndexOf('/');
 			if (i < 0) {
 				if (path.length() == 0) {
-					if (dir)
-						content.add(new DirectoryData(container, this, name));
-					else
+					if (dir) {
+						if (!dirs.contains(name)) {
+							content.add(new DirectoryData(container, this, name));
+							dirs.add(name);
+						}
+					} else {
 						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), null));
+					}
 				}
-			} else {
-				if (name.substring(0, i + 1).equals(path)) {
-					if (dir)
-						content.add(new DirectoryData(container, this, name.substring(i + 1)));
-					else
-						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), name.substring(0, i)));
+				continue;
+			}
+			String p = name.substring(0, i + 1);
+			name = name.substring(i + 1);
+			if (p.equals(path)) {
+				if (dir) {
+					if (!dirs.contains(name)) {
+						content.add(new DirectoryData(container, this, name));
+						dirs.add(name);
+					}
+				} else {
+					content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), p.substring(0, p.length() - 1)));
+				}
+				continue;
+			}
+			if (path.length() == 0) {
+				i = p.indexOf('/');
+				name = p.substring(0, i);
+				if (!dirs.contains(name)) {
+					content.add(new DirectoryData(container, this, name));
+					dirs.add(name);
+				}
+				continue;
+			}
+			if (p.startsWith(path + '/')) {
+				p = p.substring(path.length() + 1);
+				i = p.indexOf('/');
+				if (i > 0) {
+					name = p.substring(0, i);
+					if (!dirs.contains(name)) {
+						content.add(new DirectoryData(container, this, name));
+						dirs.add(name);
+					}
 				}
 			}
 		}
