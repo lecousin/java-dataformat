@@ -1,0 +1,6 @@
+compress=compresser
+compress with=compresser avec {0}
+compression=compression
+uncompress=décompresser
+uncompress with=décompresser avec {0}
+uncompression=décompression

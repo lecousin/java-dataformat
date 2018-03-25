@@ -1,5 +1,7 @@
 package net.lecousin.dataformat.compress.gzip;
 
+import net.lecousin.dataformat.compress.gzip.operations.CompressData;
+import net.lecousin.dataformat.compress.gzip.operations.UncompressData;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
@@ -25,7 +27,10 @@ public class GZipPlugin implements DataFormatPlugin {
 
 	@Override
 	public IOperation<?>[] getOperations() {
-		return new IOperation<?>[0];
+		return new IOperation<?>[] {
+			new CompressData(),
+			new UncompressData()
+		};
 	}
 
 }
