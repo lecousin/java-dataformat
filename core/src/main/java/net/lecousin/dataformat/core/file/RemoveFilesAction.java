@@ -11,33 +11,41 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.concurrent.tasks.drives.RemoveDirectoryTask;
 import net.lecousin.framework.concurrent.tasks.drives.RemoveFileTask;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.progress.WorkProgress;
 
 public class RemoveFilesAction extends RemoveDataAction<IOException> {
 
+	public static final RemoveFilesAction instance = new RemoveFilesAction();
+	
+	private RemoveFilesAction() {}
+	
 	@Override
-	public AsyncWork<Boolean, NoException> canExecute(List<Data> data) {
-		boolean files = true;
-		for (Data d : data)
-			if (!(d instanceof FileData)) {
-				files = false;
-				break;
-			}
-		return new AsyncWork<>(Boolean.valueOf(files), null);
-	}
-
-	@Override
-	public AsyncWork<List<Void>, IOException> execute(List<Data> data, Void parameter, byte priority) {
-		// TODO progress
+	public AsyncWork<List<Void>, IOException> execute(List<Data> data, Void parameter, byte priority, WorkProgress progress, long work) {
 		JoinPoint<IOException> jp = new JoinPoint<>();
+		int nbFiles = 0;
+		int nbDirs = 0;
+		for (Data d : data)
+			if (((FileData)d).isDirectory)
+				nbDirs++;
+			else
+				nbFiles++;
+		int total = nbFiles + nbDirs * 10;
 		for (Data d : data) {
 			FileData fd = (FileData)d;
 			File f = fd.file;
 			Task.OnFile<?,IOException> task;
-			if (f.isDirectory())
-				task = new RemoveDirectoryTask(f, null, 0, null, priority, false);
-			else
+			if (fd.isDirectory) {
+				long step = (work / total) * 10;
+				work -= step;
+				total -= 10;
+				task = new RemoveDirectoryTask(f, progress, step, null, priority, false);
+			} else {
+				long step = work / total;
+				work -= step;
+				total--;
 				task = new RemoveFileTask(f, priority);
+				task.getOutput().listenInline(() -> { progress.progress(step); });
+			}
 			task.start();
 			jp.addToJoin(task);
 		}

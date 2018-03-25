@@ -4,7 +4,6 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
-import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.dataformat.core.operations.IOperation;
 
 public class RarPlugin implements DataFormatPlugin {
@@ -28,11 +27,6 @@ public class RarPlugin implements DataFormatPlugin {
 	@Override
 	public DataFormatSpecializationDetector[] getSpecializationDetectors() {
 		return new DataFormatSpecializationDetector[0];
-	}
-
-	@Override
-	public DataAction[] getActions() {
-		return new DataAction[0];
 	}
 
 	@Override

@@ -1,5 +1,9 @@
 package net.lecousin.dataformat.core;
 
+import java.util.List;
+
+import net.lecousin.dataformat.core.actions.CreateDataAction;
+import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.collections.LinkedArrayList;
 import net.lecousin.framework.concurrent.Task;
@@ -16,9 +20,25 @@ public interface ContainerDataFormat extends DataFormat {
 	public Class<? extends DataCommonProperties> getSubDataCommonProperties();
 	
 	public DataCommonProperties getSubDataCommonProperties(Data subData);
+	
+	public default CreateDataAction<?, ?> getCreateNewDataAction() {
+		return null;
+	}
+	
+	public default List<DataAction<?, ?, ?>> getSubDataActions(@SuppressWarnings("unused") List<Data> list) {
+		return null;
+	}
 
 	/** Marker to signal this is a directory inside a hierarchy. */
 	public interface ContainerDirectory extends ContainerDataFormat {
+		
+		public default Data getRootDataContainer(Data data) {
+			Data container = data.getContainer();
+			while (container.getDetectedFormat() instanceof ContainerDirectory)
+				container = container.getContainer();
+			return container;
+		}
+		
 	}
 	
 	public interface CacheSubData {

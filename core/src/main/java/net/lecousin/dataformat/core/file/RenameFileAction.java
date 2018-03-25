@@ -8,17 +8,32 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.actions.RenameDataAction;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
 
-public class RenameFileAction extends RenameDataAction<IOException> {
+public class RenameFileAction extends RenameDataAction<RenameFileAction.RenameParameter, IOException> {
 
-	@Override
-	public AsyncWork<Boolean, NoException> canExecute(Data data) {
-		return new AsyncWork<>(Boolean.valueOf(data instanceof FileData), null);
+	public static final RenameFileAction instance = new RenameFileAction();
+	
+	private RenameFileAction() {}
+	
+	public static class RenameParameter {
+		
+		// TODO validation
+		@LocalizedName(namespace="b", key="Name")
+		public String name;
+		
 	}
-
+	
 	@Override
-	public AsyncWork<Void, IOException> execute(Data data, RenameParameter parameter, byte priority) {
+	public RenameParameter createParameter(Data data) {
+		RenameParameter p = new RenameParameter();
+		p.name = data.getName();
+		return p;
+	}
+	
+	@Override
+	public AsyncWork<Void, IOException> execute(Data data, RenameParameter parameter, byte priority, WorkProgress progress, long work) {
 		FileData fd = (FileData)data;
 		FileData parent = FileData.get(fd.file.getParentFile());
 		Task.OnFile<Void, IOException> task = new Task.OnFile<Void, IOException>(parent.file, "Rename file", priority) {
@@ -29,6 +44,7 @@ public class RenameFileAction extends RenameDataAction<IOException> {
 					throw new FileAlreadyExistsException(dest.getAbsolutePath());
 				if (!fd.file.renameTo(dest))
 					throw new IOException("Unable to rename file " + fd.file.getAbsolutePath() + " to " + parameter.name);
+				progress.progress(work);
 				return null;
 			}
 		};

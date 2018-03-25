@@ -3,11 +3,15 @@ package net.lecousin.dataformat.core.file;
 import java.io.File;
 import java.nio.file.AccessDeniedException;
 import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.List;
 
 import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
+import net.lecousin.dataformat.core.actions.CreateDataAction;
+import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -46,6 +50,21 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 	@Override
 	public String[] getMIMETypes() {
 		return new String[0];
+	}
+	
+	@Override
+	public CreateDataAction<?, ?> getCreateNewDataAction() {
+		return CreateFileAction.instance;
+	}
+	
+	@Override
+	public List<DataAction<?, ?, ?>> getSubDataActions(List<Data> data) {
+		List<DataAction<?, ?, ?>> list = new LinkedList<>();
+		if (data.size() == 1) {
+			list.add(RenameFileAction.instance);
+		}
+		list.add(RemoveFilesAction.instance);
+		return list;
 	}
 
 	private static final ContainerDataFormat.CacheSubData cacheSubData = new ContainerDataFormat.CacheSubData() {
