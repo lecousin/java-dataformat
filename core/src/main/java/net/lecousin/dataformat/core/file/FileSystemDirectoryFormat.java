@@ -12,6 +12,7 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.actions.CreateDataAction;
 import net.lecousin.dataformat.core.actions.DataAction;
+import net.lecousin.dataformat.core.actions.RemoveDataAction;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -58,12 +59,16 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 	}
 	
 	@Override
+	public RemoveDataAction<?> getRemoveSubDataAction(List<Data> list) {
+		return RemoveFilesAction.instance;
+	}
+	
+	@Override
 	public List<DataAction<?, ?, ?>> getSubDataActions(List<Data> data) {
 		List<DataAction<?, ?, ?>> list = new LinkedList<>();
 		if (data.size() == 1) {
 			list.add(RenameFileAction.instance);
 		}
-		list.add(RemoveFilesAction.instance);
 		return list;
 	}
 

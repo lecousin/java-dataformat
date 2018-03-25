@@ -80,6 +80,15 @@ public class DataOperationsRegistry {
 		return list;
 	}
 	
+	@SuppressWarnings("unchecked")
+	public static <T> List<TypeOperation<T,?>> getTypeOperations(Class<T> type) {
+		List<TypeOperation<T,?>> list = new LinkedList<>();
+		for (TypeOperation<?,?> op : typeOperations)
+			if (op.getType().equals(type))
+				list.add((TypeOperation<T,?>)op);
+		return list;
+	}
+	
 	
 	/*
 	public static AsyncWork<TODO,Exception> searchConversions(List<Data> inputs, byte priority) {

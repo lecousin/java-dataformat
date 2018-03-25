@@ -81,6 +81,13 @@ public class ScaleImage implements TypeOperation<BufferedImage, ScaleImage.Param
 		return new LocalizableString("dataformat.image", "Image");
 	}
 	
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/image/resize_picture_", ".png", 16, 32);
+	
+	@Override
+	public IconProvider getIconProvider() {
+		return iconProvider;
+	}
+	
 	@Override
 	public IconProvider getOutputTypeIconProvider() {
 		return ImageDataFormat.iconProvider;
