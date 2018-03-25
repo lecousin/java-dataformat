@@ -3,6 +3,7 @@ package net.lecousin.dataformat.core;
 import java.util.List;
 
 import net.lecousin.dataformat.core.actions.DataAction;
+import net.lecousin.dataformat.core.actions.InitNewDataAction;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
@@ -22,7 +23,7 @@ public interface DataFormat {
 		return null;
 	}
 	
-	public default DataAction<?, ?, ?> getInitNewDataAction() {
+	public default InitNewDataAction<?, ?> getInitNewDataAction() {
 		return null;
 	}
 	

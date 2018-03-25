@@ -5,6 +5,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import net.lecousin.dataformat.core.DataFormatDetector.MoreThanHeaderNeeded;
@@ -16,8 +17,8 @@ import net.lecousin.framework.collections.map.HalfByteHashMap;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
@@ -35,6 +36,14 @@ public class DataFormatRegistry {
 			if (formats.contains(format)) throw new RuntimeException("DataFormat already registered: "+format);
 			formats.add(format);
 		}
+	}
+
+	static {
+		registerFormat(EmptyDataFormat.instance);
+	}
+	
+	public static List<DataFormat> getDataFormats() {
+		return formats;
 	}
 	
 	// *** Detectors ***
