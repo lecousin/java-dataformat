@@ -32,6 +32,7 @@ public class RemoveFilesAction extends RemoveDataAction<IOException> {
 		int total = nbFiles + nbDirs * 10;
 		for (Data d : data) {
 			FileData fd = (FileData)d;
+			fd.forceCloseIOReadOnly();
 			File f = fd.file;
 			Task.OnFile<?,IOException> task;
 			if (fd.isDirectory) {
