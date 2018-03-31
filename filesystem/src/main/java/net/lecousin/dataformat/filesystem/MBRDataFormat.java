@@ -35,11 +35,9 @@ public class MBRDataFormat implements ContainerDataFormat {
 		return new FixedLocalizedString("Disk");
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.filesystem/images/drive_harddisk_", ".png", 16, 24, 32, 48, 64);
-	
 	@Override
 	public IconProvider getIconProvider() {
-		return iconProvider;
+		return Icons.hdd;
 	}
 
 	@Override

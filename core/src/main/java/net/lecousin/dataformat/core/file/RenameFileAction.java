@@ -17,11 +17,21 @@ public class RenameFileAction extends RenameDataAction<RenameFileAction.RenamePa
 	
 	private RenameFileAction() {}
 	
-	public static class RenameParameter {
+	public static class RenameParameter implements RenameDataAction.Param {
 		
 		// TODO validation
 		@LocalizedName(namespace="b", key="Name")
 		public String name;
+		
+		@Override
+		public String getName() {
+			return name;
+		}
+
+		@Override
+		public void setName(String name) {
+			this.name = name;
+		}
 		
 	}
 	
