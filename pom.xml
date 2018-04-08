@@ -39,6 +39,7 @@
     <module>compress</module>
     <module>compress.gzip</module>
     <module>vm</module>
+    <module>model</module>
   </modules>
   
   <licenses>
