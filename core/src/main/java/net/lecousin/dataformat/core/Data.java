@@ -545,4 +545,43 @@ public abstract class Data {
 		this.format = format;
 	}
 	
+	public AsyncWork<DataFormat, Exception> detectFinalFormat(byte priority) {
+		synchronized (this) {
+			if (formatError != null) return new AsyncWork<>(null, formatError);
+			if (format != null && formatListeners == null)
+				return new AsyncWork<>(format, null);
+		}
+		AsyncWork<DataFormat, Exception> result = new AsyncWork<>();
+		SingleEvent<Void> cancel = new SingleEvent<>();
+		detect(priority, null, 0, new DataFormatListener() {
+			@Override
+			public void formatDetected(Data data, DataFormat format) {
+			}
+			@Override
+			public void detectionError(Data data, Exception error) {
+				result.error(error);
+			}
+			@Override
+			public void detectionCancelled(Data data) {
+				result.cancel(new CancelException("Detection cancelled"));
+			}
+			@Override
+			public void endOfDetection(Data data) {
+				result.unblockSuccess(format);
+			}
+		}, cancel);
+		result.onCancel((ev) -> { cancel.fire(null); });
+		return result;
+	}
+	
+	/** Must be used only in a situation asynchronous detection cannot be used. */
+	public DataFormat detectFormatSync() {
+		AsyncWork<DataFormat, Exception> f = detectFinalFormat(Task.PRIORITY_URGENT);
+		try {
+			return f.blockResult(0);
+		} catch (Throwable t) {
+			return null;
+		}
+	}
+	
 }

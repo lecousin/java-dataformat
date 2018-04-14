@@ -1,3 +1,4 @@
 net.lecousin.framework.adapter.AdapterRegistry:net.lecousin.dataformat.core.adapters.DataToIO$Readable$Seekable
 net.lecousin.framework.adapter.AdapterRegistry:net.lecousin.dataformat.core.adapters.DataToIO$Readable
 net.lecousin.framework.adapter.AdapterRegistry:net.lecousin.dataformat.core.adapters.FileToData
+net.lecousin.framework.adapter.AdapterRegistry:net.lecousin.dataformat.core.adapters.DataToModel
