@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 
 import net.lecousin.framework.concurrent.CancelException;
@@ -289,7 +291,7 @@ public abstract class Data {
 	protected abstract <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority);
 	
 	
-	private DataFormat format = null;
+	private LinkedList<DataFormat> formats = null;
 	private Exception formatError = null;
 	private ArrayList<Pair<DataFormatListener,Task<?,?>>> formatListeners = null;
 	private Detection detection = null;
@@ -362,6 +364,7 @@ public abstract class Data {
 					IO.Readable io;
 					synchronized (Data.this) {
 						if (open.isCancelled()) {
+							progress.cancel(open.getCancelEvent());
 							detection = null;
 							return;
 						}
@@ -369,6 +372,7 @@ public abstract class Data {
 							formatError = new Exception("Data is not accessible: " + open.getError().getMessage(), open.getError());
 							for (Pair<DataFormatListener, Task<?,?>> listener : formatListeners)
 								callDetectionError(listener.getValue1(), formatError, listener.getValue2());
+							progress.error(formatError);
 							formatListeners = null;
 							detection = null;
 							return;
@@ -378,6 +382,7 @@ public abstract class Data {
 							formatError = new Exception("Data is not accessible");
 							for (Pair<DataFormatListener, Task<?,?>> listener : formatListeners)
 								callDetectionError(listener.getValue1(), formatError, listener.getValue2());
+							progress.error(formatError);
 							formatListeners = null;
 							detection = null;
 							return;
@@ -393,19 +398,23 @@ public abstract class Data {
 									detection = null;
 									return;
 								}
-								format = detectTask.getResult();
+								formats = new LinkedList<>();
+								DataFormat format = detectTask.getResult();
+								if (format != null) formats.add(format);
 								formatError = detectTask.getError();
 								if (formatError != null && logger.isErrorEnabled())
 									logger.error("Error detecting data format", formatError);
 								if (formatError != null) {
 									for (Pair<DataFormatListener, Task<?,?>> listener : formatListeners)
 										callDetectionError(listener.getValue1(), formatError, listener.getValue2());
-								} else {
+									progress.error(formatError);
+									return;
+								}
+								if (format != null)
 									for (Pair<DataFormatListener, Task<?,?>> listener : formatListeners)
 										listener.setValue2(callFormatDetected(listener.getValue1(), format, listener.getValue2()));
-								}
 							}
-							if (format == null) {
+							if (formats.isEmpty()) {
 								io.closeAsync();
 								progress.progress(STEP_SPE);
 								detection = null;
@@ -414,13 +423,13 @@ public abstract class Data {
 								formatListeners = null;
 								return;
 							}
-							DataFormatRegistry.detectSpecializations(Data.this, format, header, headerSize.get(), priority, new DataFormatListener() {
+							DataFormatRegistry.detectSpecializations(Data.this, formats.getFirst(), header, headerSize.get(), priority, new DataFormatListener() {
 								@Override
 								public void formatDetected(Data data, DataFormat format) {
 									ArrayList<Pair<DataFormatListener, Task<?,?>>> listeners;
 									synchronized (data) {
 										listeners = new ArrayList<>(formatListeners);
-										data.format = format;
+										data.formats.add(format);
 									}
 									for (Pair<DataFormatListener, Task<?,?>> listener : listeners)
 										listener.setValue2(callFormatDetected(listener.getValue1(), format, listener.getValue2()));
@@ -460,19 +469,26 @@ public abstract class Data {
 	public void detect(byte priority, WorkProgress progress, long work, DataFormatListener listener, SingleEvent<Void> cancel) {
 		synchronized (this) {
 			if (formatError != null) {
+				if (progress != null) progress.error(formatError);
 				callDetectionError(listener, formatError, null);
 				return;
 			}
-			if (format != null) {
-				Task<?,?> task = callFormatDetected(listener, format, null);
+			if (formats != null) {
+				Task<?,?> task = null;
+				for (DataFormat format : formats)
+					task = callFormatDetected(listener, format, task);
 				if (formatListeners == null) {
+					if (progress != null) progress.progress(work);
 					callEndOfDetection(listener, task);
 					return;
 				}
+				if (progress != null && detection != null)
+					WorkProgress.link(detection.progress, progress, work);
 				formatListeners.add(new Pair<>(listener, task));
 				return;
 			}
 			if (cancel.occured()) {
+				if (progress != null) progress.cancel(new CancelException("Data format detection cancelled"));
 				callDetectionCancelled(listener, null);
 				return;
 			}
@@ -540,20 +556,43 @@ public abstract class Data {
 		task.startOnDone(previous);
 	}
 	
-	public DataFormat getDetectedFormat() { return format; }
-	public void setFormat(DataFormat format) {
-		this.format = format;
+	public synchronized DataFormat getDetectedFormat() {
+		if (formats == null || formats.isEmpty()) return null;
+		return formats.getLast();
 	}
 	
-	public AsyncWork<DataFormat, Exception> detectFinalFormat(byte priority) {
+	public synchronized List<DataFormat> getDetectedFormats() {
+		if (formats == null) return new ArrayList<>(0);
+		return new ArrayList<>(formats);
+	}
+	
+	public synchronized Exception getFormatDetectionError() {
+		return formatError;
+	}
+	
+	public synchronized void setFormat(DataFormat format) {
+		this.formats = new LinkedList<>();
+		formats.add(format);
+	}
+	
+	public synchronized boolean isFormatDetectionDone() {
+		return formatError != null || (formats != null && formatListeners == null);
+	}
+	
+	public AsyncWork<DataFormat, Exception> detectFinalFormat(byte priority, WorkProgress progress, long work) {
 		synchronized (this) {
-			if (formatError != null) return new AsyncWork<>(null, formatError);
-			if (format != null && formatListeners == null)
-				return new AsyncWork<>(format, null);
+			if (formatError != null) {
+				if (progress != null) progress.error(formatError);
+				return new AsyncWork<>(null, formatError);
+			}
+			if (formats != null && formatListeners == null) {
+				if (progress != null) progress.progress(work);
+				return new AsyncWork<>(getDetectedFormat(), null);
+			}
 		}
 		AsyncWork<DataFormat, Exception> result = new AsyncWork<>();
 		SingleEvent<Void> cancel = new SingleEvent<>();
-		detect(priority, null, 0, new DataFormatListener() {
+		detect(priority, progress, work, new DataFormatListener() {
 			@Override
 			public void formatDetected(Data data, DataFormat format) {
 			}
@@ -567,7 +606,7 @@ public abstract class Data {
 			}
 			@Override
 			public void endOfDetection(Data data) {
-				result.unblockSuccess(format);
+				result.unblockSuccess(getDetectedFormat());
 			}
 		}, cancel);
 		result.onCancel((ev) -> { cancel.fire(null); });
@@ -576,7 +615,7 @@ public abstract class Data {
 	
 	/** Must be used only in a situation asynchronous detection cannot be used. */
 	public DataFormat detectFormatSync() {
-		AsyncWork<DataFormat, Exception> f = detectFinalFormat(Task.PRIORITY_URGENT);
+		AsyncWork<DataFormat, Exception> f = detectFinalFormat(Task.PRIORITY_URGENT, null, 0);
 		try {
 			return f.blockResult(0);
 		} catch (Throwable t) {

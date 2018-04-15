@@ -11,6 +11,7 @@ import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsInputStream;
+import net.lecousin.framework.io.util.ReadableWithProgress;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
@@ -53,17 +54,17 @@ public class BMPReaderOp implements DataFormatReadOperation.OneToOne<BMPDataForm
 	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
 		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
 		Task<Pair<BufferedImage,Object>,Exception> task = new Task.Cpu<Pair<BufferedImage,Object>,Exception>("Reading BMP data", priority) {
+			@SuppressWarnings("resource")
 			@Override
 			public Pair<BufferedImage,Object> run() throws Exception {
 				if (!open.isSuccessful())
 					throw open.getError();
-				if (progress != null) progress.progress(work/4);
+				if (progress != null) progress.progress(work/5);
 				try (IO.Readable.Seekable io = open.getResult()) {
-					return new Pair<>(ImageIO.read(IOAsInputStream.get(io)), null);
+					return new Pair<>(ImageIO.read(IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work-work/5))), null);
 				} catch (Throwable t) {
 					throw new Exception("Error reading BMP data", t);
 				} finally {
-					if (progress != null) progress.progress(work-work/4);
 				}
 			}
 		};

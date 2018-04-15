@@ -23,6 +23,7 @@ import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsInputStream;
+import net.lecousin.framework.io.util.ReadableWithProgress;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -179,11 +180,10 @@ public class WordFile_CFB_DataFormat extends CFBDataFormat {
 		@SuppressWarnings("resource")
 		@Override
 		protected AsyncWork<HWPFDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			InputStream is = IOAsInputStream.get(io);
+			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work));
 			try { return new AsyncWork<>(new HWPFDocument(is), null); }
 			catch (Exception e) { return new AsyncWork<>(null, e); }
 			finally {
-				if (progress != null) progress.progress(work);
 			}
 		}
 

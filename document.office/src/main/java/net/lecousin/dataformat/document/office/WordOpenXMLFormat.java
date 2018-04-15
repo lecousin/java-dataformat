@@ -7,6 +7,7 @@ import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsInputStream;
+import net.lecousin.framework.io.util.ReadableWithProgress;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -46,11 +47,10 @@ public class WordOpenXMLFormat extends OpenXMLFormat {
 		@SuppressWarnings("resource")
 		@Override
 		protected AsyncWork<XWPFDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			InputStream is = IOAsInputStream.get(io);
+			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work));
 			try { return new AsyncWork<>(new XWPFDocument(is), null); }
 			catch (Exception e) { return new AsyncWork<>(null, e); }
 			finally {
-				if (progress != null) progress.progress(work);
 			}
 		}
 
