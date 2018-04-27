@@ -3,17 +3,18 @@ package net.lecousin.dataformat.archive.rar;
 import java.io.IOException;
 import java.util.ArrayList;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.progress.WorkProgress;
 
 public class RarArchive {
 	
-	static final Log logger = LogFactory.getLog("dataformat.rar");
+	static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(RarArchive.class);
+	}
 
 	public RarArchive(IO.Readable.Seekable io) {
 		this.io = io;

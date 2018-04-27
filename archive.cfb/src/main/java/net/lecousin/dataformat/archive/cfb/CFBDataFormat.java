@@ -98,7 +98,7 @@ public class CFBDataFormat extends ArchiveDataFormat {
 					@Override
 					public void run() {
 						if (cfb.get().getSynchOnReady().hasError()) {
-							CFBFile.logger.error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
+							CFBFile.getLogger().error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
 							sp.unblockError(cfb.get().getSynchOnReady().getError());
 							cfb.release(CFBDataFormat.this);
 							return;
@@ -141,7 +141,7 @@ public class CFBDataFormat extends ArchiveDataFormat {
 				@Override
 				public void run() {
 					if (cfb.get().getSynchOnReady().hasError()) {
-						CFBFile.logger.error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
+						CFBFile.getLogger().error("Error reading CFB file", cfb.get().getSynchOnReady().getError());
 						listener.error(cfb.get().getSynchOnReady().getError());
 						progress.error(cfb.get().getSynchOnReady().getError());
 						cfb.release(CFBDataFormat.this);

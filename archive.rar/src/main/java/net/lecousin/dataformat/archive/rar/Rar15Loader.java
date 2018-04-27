@@ -42,7 +42,7 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				if (!readHeader.isSuccessful()) {
-					RarArchive.logger.error("Unable to read RAR header", readHeader.getError());
+					RarArchive.getLogger().error("Unable to read RAR header", readHeader.getError());
 					rar.contentLoaded.error(readHeader.getError());
 					return;
 				}
@@ -51,7 +51,7 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				if (headerBuf[2] != 0x73) {
-					RarArchive.logger.error("Invalid RAR Archive: archive header (type 0x73) expected after marker header, found type is: "+StringUtil.encodeHexa(headerBuf[2]));
+					RarArchive.getLogger().error("Invalid RAR Archive: archive header (type 0x73) expected after marker header, found type is: "+StringUtil.encodeHexa(headerBuf[2]));
 					rar.contentLoaded.error(new IOException("Invalid RAR Archive: archive header (type 0x73) expected after marker header, found type is: "+StringUtil.encodeHexa(headerBuf[2])));
 					return;
 				}
@@ -82,7 +82,7 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				if (!readHeader.isSuccessful()) {
-					RarArchive.logger.error("Unable to read RAR block header at "+pos, readHeader.getError());
+					RarArchive.getLogger().error("Unable to read RAR block header at "+pos, readHeader.getError());
 					rar.contentLoaded.error(readHeader.getError());
 					return;
 				}
@@ -93,17 +93,17 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				if (readHeader.getResult().intValue() != 7) {
-					RarArchive.logger.error("Invalid RAR Archive: block header is truncated");
+					RarArchive.getLogger().error("Invalid RAR Archive: block header is truncated");
 					rar.contentLoaded.error(new IOException("Invalid RAR Archive: block header is truncated"));
 					return;
 				}
 				switch (headerBuf[2]) {
 				case 0x72:
-					RarArchive.logger.error("Unexpected marker block inside the file");
+					RarArchive.getLogger().error("Unexpected marker block inside the file");
 					rar.contentLoaded.error(new IOException("Unexpected marker block inside the file"));
 					return;
 				case 0x73:
-					RarArchive.logger.error("Unexpected archive header inside the file");
+					RarArchive.getLogger().error("Unexpected archive header inside the file");
 					rar.contentLoaded.error(new IOException("Unexpected archive header inside the file"));
 					return;
 				case 0x74: // file header
@@ -119,7 +119,7 @@ class Rar15Loader extends RarLoader {
 					goToNextHeader(pos, progress, work);
 					break;
 				default: // unknown
-					RarArchive.logger.info("Unknown RAR block type "+StringUtil.encodeHexa(headerBuf[2])+" at "+pos);
+					RarArchive.getLogger().info("Unknown RAR block type "+StringUtil.encodeHexa(headerBuf[2])+" at "+pos);
 					goToNextHeader(pos, progress, work);
 					break;
 				}
@@ -142,12 +142,12 @@ class Rar15Loader extends RarLoader {
 						return;
 					}
 					if (!read2.isSuccessful()) {
-						RarArchive.logger.error("Error reading additional header data at "+(pos+7), read2.getError());
+						RarArchive.getLogger().error("Error reading additional header data at "+(pos+7), read2.getError());
 						rar.contentLoaded.error(read2.getError());
 						return;
 					}
 					if (read2.getResult().intValue() != 4) {
-						RarArchive.logger.error("Invalid RAR Archive: block header is truncated");
+						RarArchive.getLogger().error("Invalid RAR Archive: block header is truncated");
 						rar.contentLoaded.error(new IOException("Invalid RAR Archive: block header is truncated"));
 						return;
 					}
@@ -174,12 +174,12 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				if (!read.isSuccessful()) {
-					RarArchive.logger.error("Error reading file header at "+pos, read.getError());
+					RarArchive.getLogger().error("Error reading file header at "+pos, read.getError());
 					rar.contentLoaded.error(read.getError());
 					return;
 				}
 				if (read.getResult().intValue() != 25) {
-					RarArchive.logger.error("Invalid RAR Archive: file header is truncated");
+					RarArchive.getLogger().error("Invalid RAR Archive: file header is truncated");
 					rar.contentLoaded.error(new IOException("Invalid RAR Archive: file header is truncated"));
 					return;
 				}
@@ -206,12 +206,12 @@ class Rar15Loader extends RarLoader {
 							return;
 						}
 						if (!read2.isSuccessful()) {
-							RarArchive.logger.error("Error reading file header at "+pos, read2.getError());
+							RarArchive.getLogger().error("Error reading file header at "+pos, read2.getError());
 							rar.contentLoaded.error(read2.getError());
 							return;
 						}
 						if (read2.getResult().intValue() != b.length) {
-							RarArchive.logger.error("Invalid RAR Archive: file header is truncated");
+							RarArchive.getLogger().error("Invalid RAR Archive: file header is truncated");
 							rar.contentLoaded.error(new IOException("Invalid RAR Archive: file header is truncated"));
 							return;
 						}

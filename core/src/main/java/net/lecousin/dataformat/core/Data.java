@@ -8,6 +8,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -19,18 +20,18 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.SubIO;
 import net.lecousin.framework.io.buffering.BufferedIO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
+import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.mutable.MutableInteger;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.util.Pair;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 public abstract class Data {
-	
-	public static final Log logger = LogFactory.getLog("net.lecousin.dataformat");
+
+	public static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(Data.class);
+	}
 	
 	public abstract String getName();
 	public abstract String getDescription();
@@ -389,6 +390,7 @@ public abstract class Data {
 						}
 						detectTask = DataFormatRegistry.detect(Data.this, io, getSize(), priority, header, headerSize, progress, STEP_DETECT);
 					}
+					Logger logger = getLogger();
 					detectTask.listenInline(new Runnable() {
 						@Override
 						public void run() {
@@ -402,7 +404,7 @@ public abstract class Data {
 								DataFormat format = detectTask.getResult();
 								if (format != null) formats.add(format);
 								formatError = detectTask.getError();
-								if (formatError != null && logger.isErrorEnabled())
+								if (formatError != null && logger.error())
 									logger.error("Error detecting data format", formatError);
 								if (formatError != null) {
 									for (Pair<DataFormatListener, Task<?,?>> listener : formatListeners)

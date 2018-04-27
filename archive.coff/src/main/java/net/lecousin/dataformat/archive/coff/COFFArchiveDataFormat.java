@@ -121,7 +121,7 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 			}
 			COFFArchive archive = get.getResult().get();
 			if (archive == null) {
-				COFFArchive.logger.error("Unable to read COFF Archive");
+				COFFArchive.getLogger().error("Unable to read COFF Archive");
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
 				get.getResult().release(COFFArchiveDataFormat.this);

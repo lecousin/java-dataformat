@@ -2,119 +2,206 @@ package net.lecousin.dataformat.archive.zip;
 
 import java.io.EOFException;
 import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+import java.nio.ByteBuffer;
 import java.util.Calendar;
 import java.util.TimeZone;
 
 import net.lecousin.dataformat.archive.zip.ZipArchive.ZippedFile;
 import net.lecousin.framework.application.LCCore;
+import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
-import net.lecousin.framework.mutable.MutableLong;
+import net.lecousin.framework.log.Logger;
 
 class ZipArchiveRecords {
 	
 	public static final int CentralDirectoryID = 0x0102;
 	public static final int LocalFileID = 0x0304;
 
-	static int readCentralDirectory(IO.Readable.Buffered input, boolean firstEntryIDRead, MutableLong pos, Listener<ZippedFile> listener) throws IOException {
-		if (!firstEntryIDRead) {
-			if (input.read() != 'P') throw new IOException("Central Directory must start with PK0102");
-			if (input.read() != 'K') throw new IOException("Central Directory must start with PK0102");
-			if (input.read() != 0x01) throw new IOException("Central Directory must start with PK0102");
-			if (input.read() != 0x02) throw new IOException("Central Directory must start with PK0102");
-			if (pos != null) pos.add(4);
-		}
-		do {
-			ZippedFile entry = readCentralDirectoryEntry(input, listener);
-			if (pos != null)
-				pos.add(entry.headerLength - 4);
-			int c = input.read();
-			if (c == -1) return -1;
-			if (pos != null) pos.inc();
-			if (c != 'P')
-				throw new IOException("Character 0x"+Integer.toHexString(c)+" found after Central Directory entry, another record starting with PK must follow");
-			c = input.read();
-			if (c == -1) return -1;
-			if (pos != null) pos.inc();
-			if (c != 'K')
-				throw new IOException("Character P then 0x"+Integer.toHexString(c)+" found after Central Directory entry, another record starting with PK must follow");
-			int c1 = input.read();
-			if (c1 == -1) return -1;
-			if (pos != null) pos.inc();
-			int c2 = input.read();
-			if (c2 == -1) return -1;
-			if (pos != null) pos.inc();
-			int type = (c1<<8)|c2;
-			if (type != CentralDirectoryID)
-				return type;
-		} while (true);
+	static SynchronizationPoint<IOException> readCentralDirectory(IO.Readable.Buffered input, Listener<ZippedFile> listener) {
+		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
+		byte[] pk = new byte[4];
+		readNextCentralDirectoryEntry(input, listener, pk, true, sp);
+		return sp;
 	}
-	static ZippedFile readCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener) throws IOException {
+	
+	private static void readNextCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp) {
+		AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(pk));
+		if (!r.isUnblocked()) {
+			r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP central directory", input.getPriority(), () -> {
+				readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue());
+			}), sp);
+			return;
+		}
+		if (r.hasError()) {
+			sp.error(r.getError());
+			return;
+		}
+		if (r.isCancelled()) {
+			sp.cancel(r.getCancelEvent());
+			return;
+		}
+		readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue());
+	}
+	
+	private static void readCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp, int nbRead) {
+		if (nbRead != 4) {
+			if (firstEntry) {
+				sp.error(new IOException("Unexpected end of file at the beginning of ZIP central directory"));
+				return;
+			}
+			sp.unblock();
+			return;
+		}
+		if (pk[0] != 'P' || pk[1] != 'K' || pk[2] != 1 || pk[3] != 2) {
+			if (firstEntry) {
+				sp.error(new IOException("Central Directory must start with PK0102"));
+				return;
+			}
+			sp.unblock();
+			return;
+		}
+		AsyncWork<ZippedFile, IOException> r = readCentralDirectoryEntry(input);
+		if (!r.isUnblocked()) {
+			r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP central directory", input.getPriority(), () -> {
+				centralDirectoryEntryRead(input, listener, pk, sp, r.getResult());
+			}), sp);
+			return;
+		}
+		if (r.hasError()) {
+			sp.error(r.getError());
+			return;
+		}
+		if (r.isCancelled()) {
+			sp.cancel(r.getCancelEvent());
+			return;
+		}
+		centralDirectoryEntryRead(input, listener, pk, sp, r.getResult());
+	}
+	
+	private static void centralDirectoryEntryRead(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, SynchronizationPoint<IOException> sp, ZippedFile entry) {
+		if (listener != null)
+			listener.fire(entry);
+		readNextCentralDirectoryEntry(input, listener, pk, false, sp);
+	}
+	
+	static AsyncWork<ZippedFile, IOException> readCentralDirectoryEntry(IO.Readable.Buffered input) {
+		byte[] buf = new byte[42];
+		AsyncWork<ZippedFile, IOException> result = new AsyncWork<>();
+		AsyncWork<Integer, IOException> read = input.readFullySyncIfPossible(ByteBuffer.wrap(buf));
+		if (!read.isUnblocked()) {
+			read.listenAsync(new Task.Cpu.FromRunnable("Read ZIP central directory entry", input.getPriority(), () -> {
+				if (read.getResult().intValue() != 42)
+					result.error(new EOFException("Unexpected end of file in a middle of a central directory entry"));
+				else
+					readCentralDirectoryEntry(input, buf, result);
+			}), result);
+			return result;
+		}
+		if (read.getResult().intValue() != 42)
+			result.error(new EOFException("Unexpected end of file in a middle of a central directory entry"));
+		else
+			readCentralDirectoryEntry(input, buf, result);
+		return result;
+	}
+
+	private static void readCentralDirectoryEntry(IO.Readable.Buffered input, byte[] buf, AsyncWork<ZippedFile, IOException> result) {
 		ZippedFile info = new ZippedFile();
-		info.versionMadeBy = DataUtil.readUnsignedShortLittleEndian(input);
-		info.versionNeeded = DataUtil.readUnsignedShortLittleEndian(input);
-		info.flags = DataUtil.readUnsignedShortLittleEndian(input);
-		info.compressionMethod = DataUtil.readUnsignedShortLittleEndian(input);
-		int mod_time = DataUtil.readUnsignedShortLittleEndian(input);
-		int mod_date = DataUtil.readUnsignedShortLittleEndian(input);
+		info.versionMadeBy = DataUtil.readUnsignedShortLittleEndian(buf, 0);
+		info.versionNeeded = DataUtil.readUnsignedShortLittleEndian(buf, 2);
+		info.flags = DataUtil.readUnsignedShortLittleEndian(buf, 4);
+		info.compressionMethod = DataUtil.readUnsignedShortLittleEndian(buf, 6);
+		int mod_time = DataUtil.readUnsignedShortLittleEndian(buf, 8);
+		int mod_date = DataUtil.readUnsignedShortLittleEndian(buf, 10);
 		// mod_time and date may be null in case of encryption
 		if (mod_time != 0 && mod_date != 0) {
 			Calendar cal = Calendar.getInstance();
 			cal.set(
-				(mod_date&0xFE00)>>9 + 1980, 
-				(mod_date&0x01E0)>>5 + 1, 
-				(mod_date&0x001F), 
-				(mod_time&0xF800)>>11, 
-				(mod_time&0x07E0)>>5, 
+				(mod_date&0xFE00)>>9 + 1980,
+				(mod_date&0x01E0)>>5 + 1,
+				(mod_date&0x001F),
+				(mod_time&0xF800)>>11,
+				(mod_time&0x07E0)>>5,
 				(mod_time&0x001F)
 			);
 			info.lastModificationTimestamp = cal.getTimeInMillis();
 		} else
 			info.lastModificationTimestamp = 0;
-		info.crc32 = DataUtil.readUnsignedIntegerLittleEndian(input);
-		info.compressedSize = DataUtil.readUnsignedIntegerLittleEndian(input);
-		info.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(input);
-		int name_len = DataUtil.readUnsignedShortLittleEndian(input);
-		int extra_len = DataUtil.readUnsignedShortLittleEndian(input);
-		int comment_len = DataUtil.readUnsignedShortLittleEndian(input);
-		info.diskNumberStart = DataUtil.readUnsignedShortLittleEndian(input);
-		/* info.internalAttributes = */ DataUtil.readUnsignedShortLittleEndian(input);
-		/* info.externalAttributes = */ DataUtil.readUnsignedIntegerLittleEndian(input);
-		info.offset = DataUtil.readUnsignedIntegerLittleEndian(input);
-		if (name_len > 0) {
-			byte[] buf = new byte[name_len];
-			int i = input.readFully(buf);
-			if (i < name_len) throw new EOFException();
-			info.filename = (info.flags&0x800) != 0 ? new String(buf, "UTF-8") : new String(buf);
-		}
-		if (extra_len > 0)
-			readExtraFields(info, extra_len, input);
-		if (comment_len > 0) {
-			byte[] buf = new byte[comment_len];
-			int i = input.readFully(buf);
-			if (i < comment_len) throw new EOFException();
-			info.comment = (info.flags&0x800) != 0 ? new String(buf, "UTF-8") : new String(buf);
-		}
+		info.crc32 = DataUtil.readUnsignedIntegerLittleEndian(buf, 12);
+		info.compressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 16);
+		info.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 20);
+		int name_len = DataUtil.readUnsignedShortLittleEndian(buf, 24);
+		int extra_len = DataUtil.readUnsignedShortLittleEndian(buf, 26);
+		int comment_len = DataUtil.readUnsignedShortLittleEndian(buf, 28);
+		info.diskNumberStart = DataUtil.readUnsignedShortLittleEndian(buf, 30);
+		/* info.internalAttributes = DataUtil.readUnsignedShortLittleEndian(buf, 32);*/
+		/* info.externalAttributes = DataUtil.readUnsignedIntegerLittleEndian(buf, 34);*/
+		info.offset = DataUtil.readUnsignedIntegerLittleEndian(buf, 38);
 		info.headerLength = 4 + 42 + name_len + extra_len + comment_len;
-		listener.fire(info);
-		return info;
+		if (name_len > 0)
+			readEntryName(info, name_len, extra_len, 0, input, result);
+		else if (extra_len > 0)
+			readExtraFields(info, input, extra_len, 0, result);
+		else
+			result.unblockSuccess(info);
 	}
-	static ZippedFile readLocalFileEntry(IO.Readable.Buffered input, boolean headerRead, long offset) throws IOException {
+	
+	static AsyncWork<ZippedFile, IOException> readLocalFileEntry(IO.Readable.Buffered input, boolean headerRead, long offset) {
+		byte[] buf = new byte[26];
+		AsyncWork<ZippedFile, IOException> result = new AsyncWork<>();
 		if (!headerRead) {
-			if (input.read() != 'P') throw new IOException("Invalid Local File entry: must start with PK0304");
-			if (input.read() != 'K') throw new IOException("Invalid Local File entry: must start with PK0304");
-			if (input.read() != 0x03) throw new IOException("Invalid Local File entry: must start with PK0304");
-			if (input.read() != 0x04) throw new IOException("Invalid Local File entry: must start with PK0304");
+			AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(buf, 0, 4));
+			if (!r.isUnblocked()) {
+				r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP Local entry", input.getPriority(), () -> {
+					readLocalFileEntryHeader(input, offset, buf, result);
+				}), result);
+				return result;
+			}
+			readLocalFileEntryHeader(input, offset, buf, result);
+			return result;
 		}
+		readLocalFileEntryBuffer(input, offset, buf, result);
+		return result;
+	}
+	
+	private static void readLocalFileEntryHeader(IO.Readable.Buffered input, long offset, byte[] buf, AsyncWork<ZippedFile, IOException> result) {
+		if (buf[0] != 'P' || buf[1] != 'K' || buf[2] != 0x03 || buf[3] != 0x04) {
+			result.error(new IOException("Invalid Local File entry at " + offset + ": must start with PK0304"));
+			return;
+		}
+		readLocalFileEntryBuffer(input, offset, buf, result);
+	}
+	
+	private static void readLocalFileEntryBuffer(IO.Readable.Buffered input, long offset, byte[] buf, AsyncWork<ZippedFile, IOException> result) {
+		AsyncWork<Integer, IOException> read = input.readFullySyncIfPossible(ByteBuffer.wrap(buf));
+		if (!read.isUnblocked()) {
+			read.listenAsync(new Task.Cpu.FromRunnable("Read ZIP local file entry", input.getPriority(), () -> {
+				if (read.getResult().intValue() != 26)
+					result.error(new EOFException("Unexpected end of file in a middle of a local file entry"));
+				else
+					readLocalFileEntry(input, offset, buf, result);
+			}), result);
+			return;
+		}
+		if (read.getResult().intValue() != 26)
+			result.error(new EOFException("Unexpected end of file in a middle of a local file entry"));
+		else
+			readLocalFileEntry(input, offset, buf, result);
+	}
+	
+	private static void readLocalFileEntry(IO.Readable.Buffered input, long offset, byte[] buf, AsyncWork<ZippedFile, IOException> result) {
 		ZippedFile info = new ZippedFile();
 		info.localEntry = info;
 		info.offset = offset;
-		info.versionNeeded = DataUtil.readUnsignedShortLittleEndian(input);
-		info.flags = DataUtil.readUnsignedShortLittleEndian(input);
-		info.compressionMethod = DataUtil.readUnsignedShortLittleEndian(input);
-		int mod_time = DataUtil.readUnsignedShortLittleEndian(input);
-		int mod_date = DataUtil.readUnsignedShortLittleEndian(input);
+		info.versionNeeded = DataUtil.readUnsignedShortLittleEndian(buf, 0);
+		info.flags = DataUtil.readUnsignedShortLittleEndian(buf, 2);
+		info.compressionMethod = DataUtil.readUnsignedShortLittleEndian(buf, 4);
+		int mod_time = DataUtil.readUnsignedShortLittleEndian(buf, 6);
+		int mod_date = DataUtil.readUnsignedShortLittleEndian(buf, 8);
 		// mod_time and date may be null in case of encryption
 		if (mod_time != 0 && mod_date != 0) {
 			Calendar cal = Calendar.getInstance();
@@ -129,45 +216,127 @@ class ZipArchiveRecords {
 			info.lastModificationTimestamp = cal.getTimeInMillis();
 		} else
 			info.lastModificationTimestamp = 0;
-		info.crc32 = DataUtil.readUnsignedIntegerLittleEndian(input);
-		info.compressedSize = DataUtil.readUnsignedIntegerLittleEndian(input);
-		info.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(input);
-		int name_len = DataUtil.readUnsignedShortLittleEndian(input);
-		int extra_len = DataUtil.readUnsignedShortLittleEndian(input);
-		if (name_len > 0) {
-			byte[] buf = new byte[name_len];
-			int i = input.readFully(buf);
-			if (i < name_len) throw new EOFException();
-			info.filename = (info.flags&0x800) != 0 ? new String(buf, "UTF-8") : new String(buf);
-		}
-		if (extra_len > 0)
-			readExtraFields(info, extra_len, input);
+		info.crc32 = DataUtil.readUnsignedIntegerLittleEndian(buf, 10);
+		info.compressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 14);
+		info.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 18);
+		int name_len = DataUtil.readUnsignedShortLittleEndian(buf, 22);
+		int extra_len = DataUtil.readUnsignedShortLittleEndian(buf, 24);
 		info.headerLength = 4 + 26 + name_len + extra_len;
-		return info;
+		if (name_len > 0)
+			readEntryName(info, name_len, extra_len, 0, input, result);
+		else if (extra_len > 0)
+			readExtraFields(info, input, extra_len, 0, result);
+		else
+			result.unblockSuccess(info);
 	}
 	
-	static void readExtraFields(ZippedFile info, int len, IO.Readable.Buffered input) throws IOException {
-		do {
-			if (len < 4) {
-				// invalid, just skip it
-				input.skip(len);
+	private static void readEntryName(ZippedFile info, int name_len, int extra_len, int comment_len, IO.Readable.Buffered input, AsyncWork<ZippedFile, IOException> result) {
+		byte[] b = new byte[name_len];
+		AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(b));
+		if (r.isUnblocked()) {
+			if (!r.isSuccessful()) {
+				if (r.hasError()) result.error(r.getError());
+				else result.cancel(r.getCancelEvent());
 				return;
 			}
-			int extra_id = DataUtil.readUnsignedShortLittleEndian(input);
-			int extra_len = DataUtil.readUnsignedShortLittleEndian(input);
-			if (extra_len > len-4) {
-				// invalid, just skip remaining bytes
-				input.skip(len);
+			readEntryName(info, name_len, r.getResult().intValue(), b, extra_len, comment_len, input, result);
+			return;
+		}
+		r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP local file entry", input.getPriority(), () -> {
+			readEntryName(info, name_len, r.getResult().intValue(), b, extra_len, comment_len, input, result);
+		}), result);
+	}
+	
+	private static void readEntryName(ZippedFile info, int name_len, int nbRead, byte[] b, int extra_len, int comment_len, IO.Readable.Buffered input, AsyncWork<ZippedFile, IOException> result) {
+		if (nbRead < name_len) {
+			result.error(new EOFException("Only " + nbRead + " bytes read on " + name_len + " for zip entry name"));
+			return;
+		}
+		try {
+			info.filename = (info.flags&0x800) != 0 ? new String(b, "UTF-8") : new String(b);
+		} catch (UnsupportedEncodingException e) {
+			// not possible
+		}
+		if (extra_len > 0)
+			readExtraFields(info, input, extra_len, comment_len, result);
+		else if (comment_len > 0)
+			readComment(info, comment_len, input, result);
+		else
+			result.unblockSuccess(info);
+	}
+	
+	private static void readComment(ZippedFile info, int comment_len, IO.Readable.Buffered input, AsyncWork<ZippedFile, IOException> result) {
+		byte[] b = new byte[comment_len];
+		AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(b));
+		if (r.isUnblocked()) {
+			if (!r.isSuccessful()) {
+				if (r.hasError()) result.error(r.getError());
+				else result.cancel(r.getCancelEvent());
 				return;
+			}
+			readComment(info, comment_len, r.getResult().intValue(), b, result);
+			return;
+		}
+		r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP local file entry", input.getPriority(), () -> {
+			readComment(info, comment_len, r.getResult().intValue(), b, result);
+		}), result);
+	}
+	
+	private static void readComment(ZippedFile info, int comment_len, int nbRead, byte[] b, AsyncWork<ZippedFile, IOException> result) {
+		if (nbRead < comment_len) {
+			result.error(new EOFException());
+			return;
+		}
+		try {
+			info.comment = (info.flags&0x800) != 0 ? new String(b, "UTF-8") : new String(b);
+		} catch (UnsupportedEncodingException e) {
+			// not possible
+		}
+		result.unblockSuccess(info);
+	}
+	
+	private static void readExtraFields(ZippedFile info, IO.Readable.Buffered input, int len, int comment_len, AsyncWork<ZippedFile, IOException> result) {
+		byte[] buf = new byte[len];
+		AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(buf));
+		if (r.isUnblocked()) {
+			if (!r.isSuccessful()) {
+				if (r.hasError()) result.error(r.getError());
+				else result.cancel(r.getCancelEvent());
+				return;
+			}
+			readExtraFields(info, len, r.getResult().intValue(), buf, comment_len, input, result);
+			return;
+		}
+		r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP local file entry", input.getPriority(), () -> {
+			readExtraFields(info, len, r.getResult().intValue(), buf, comment_len, input, result);
+		}), result);
+	}
+
+	private static void readExtraFields(ZippedFile info, int len, int nbRead, byte[] buf, int comment_len, IO.Readable.Buffered input, AsyncWork<ZippedFile, IOException> result) {
+		if (nbRead < len) {
+			result.unblockError(new EOFException());
+			return;
+		}
+		int pos = 0;
+		while (pos < len) {
+			if (len - pos < 4) {
+				// invalid, just skip it
+				break;
+			}
+			int extra_id = DataUtil.readUnsignedShortLittleEndian(buf, pos);
+			int extra_len = DataUtil.readUnsignedShortLittleEndian(buf, pos + 2);
+			if (extra_len > len - pos - 4) {
+				// invalid, just skip remaining bytes
+				break;
 			}
 			switch (extra_id) {
-			case 0x0001: readExtraFieldZip64(info, extra_len, input); break;
+			case 0x0001: readExtraFieldZip64(info, buf, pos + 4, extra_len); break;
 			//TODO case 0x0007: readExtraFieldAVInfo(header, extra_len); break;
 			//TODO case 0x0008: readExtraFieldLanguageExtendingData(header, extra_len); break;
 			//TODO case 0x0009: readExtraFieldOS2(header, extra_len); break;
-			case 0x000A: readExtraFieldNTFS(info, extra_len, input); break;
+			case 0x000A: readExtraFieldNTFS(info, buf, pos + 4, extra_len); break;
 			//TODO case 0x000C: readExtraFieldOpenVMS(header, extra_len); break;
-			case 0x000D: readExtraFieldUNIX(info, extra_len, input); break;
+			case 0x000D: readExtraFieldUNIX(info, buf, pos + 4, extra_len); break;
 			//TODO case 0x000E: readExtraFieldFileStream(header, extra_len); break;
 			//TODO case 0x000F: readExtraFieldPatchDescriptor(header, extra_len); break;
 			//TODO case 0x0014: readExtraFieldPKCS7ForX509Certificates(header, extra_len); break;
@@ -180,21 +349,31 @@ class ZipArchiveRecords {
 			//TODO case 0x0066: readExtraFieldS390_AS400_compressed(header, extra_len); break;
 			//TODO case 0x4690: readExtraFieldPOSZIP4690(header, extra_len); break;
 			// third-party
-			case 0x5455: readExtraFieldExtendedTimestamp(info, extra_len, input); break;
-			case 0x5855: readExtraFieldUnix1(info, extra_len, input); break;
-			case 0x7855: readExtraFieldUnix2(info, extra_len, input); break;
-			case 0x7875: readExtraFieldUnixN(/*info, */extra_len, input); break;
+			case 0x5455: readExtraFieldExtendedTimestamp(info, buf, pos + 4, extra_len); break;
+			case 0x5855: readExtraFieldUnix1(info, buf, pos + 4, extra_len); break;
+			case 0x7855: readExtraFieldUnix2(info, buf, pos + 4, extra_len); break;
+			case 0x7875:
+				/* Unix N
+				Value         Size        Description
+				 -----         ----        -----------
+				 0x7875        Short       tag for this extra block type ("ux")
+				 TSize         Short       total data size for this block
+				 Version       1 byte      version of this extra field, currently 1
+				 UIDSize       1 byte      Size of UID field
+				 UID           Variable    UID for this entry (little endian)
+				 GIDSize       1 byte      Size of GID field
+				 GID           Variable    GID for this entry (little endian)
+						 */
+				break;
 			case 0xA220: // this is used as growth hint by office open XML documents
 				// TODO mark as Office Open XML
-				input.skip(extra_len);
 				break;
 			case 0xCAFE: // this is used by Java
 				// TODO mark as Java Executable
-				input.skip(extra_len);
 				break;
 			default:
-				if (ZipArchive.logger.isInfoEnabled()) ZipArchive.logger.info("ZipArchive: Unknown extra field ID 0x"+Integer.toHexString(extra_id)+" in "+input.getSourceDescription());
-				input.skip(extra_len);
+				Logger logger = ZipArchive.getLogger();
+				if (logger.info()) logger.info("ZipArchive: Unknown extra field ID 0x"+Integer.toHexString(extra_id)+" in "+input.getSourceDescription());
 				break;
 			}
 			/*
@@ -227,45 +406,45 @@ class ZipArchiveRecords {
           *0xa220        Microsoft Open Packaging Growth Hint
           0xfd4a        SMS/QDOS			 * 
 			 */
-			len -= 4 + extra_len;
-		} while (len > 0);
+		
+			pos += 4 + extra_len;
+		}
+		if (comment_len > 0)
+			readComment(info, comment_len, input, result);
+		else
+			result.unblockSuccess(info);
 	}
-	static void readExtraFieldZip64(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
+	
+	private static void readExtraFieldZip64(ZippedFile header, byte[] buf, int pos, int len) {
 		if (len != 28) {
-			if (ZipArchive.logger.isInfoEnabled()) ZipArchive.logger.info("ZipArchive: Invalid Zip64 Extra field: expected length is 28, found is "+len);
-			input.skip(len);
+			Logger logger = ZipArchive.getLogger();
+			if (logger.info()) logger.info("ZipArchive: Invalid Zip64 Extra field: expected length is 28, found is "+len);
 			return;
 		}
 		if (header.uncompressedSize == 0xFFFFFFFF)
-			header.uncompressedSize = DataUtil.readLongLittleEndian(input);
-		else
-			input.skip(8);
+			header.uncompressedSize = DataUtil.readLongLittleEndian(buf, pos);
 		if (header.compressedSize == 0xFFFFFFFF)
-			header.compressedSize = DataUtil.readLongLittleEndian(input);
-		else
-			input.skip(8);
+			header.compressedSize = DataUtil.readLongLittleEndian(buf, pos + 8);
 		if (header.offset == 0xFFFFFFFF)
-			header.offset = DataUtil.readLongLittleEndian(input);
-		else
-			input.skip(8);
+			header.offset = DataUtil.readLongLittleEndian(buf, pos + 16);
 		if (header.diskNumberStart == 0xFFFF)
-			header.diskNumberStart = DataUtil.readUnsignedIntegerLittleEndian(input);
-		else
-			input.skip(4);
+			header.diskNumberStart = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 24);
 	}
-	static void readExtraFieldNTFS(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
+	
+	static void readExtraFieldNTFS(ZippedFile header, byte[] buf, int pos, int len) {
 		// 4 bytes reserved
-		input.skip(4);
+		pos += 4;
 		len -= 4;
 		while (len > 0) {
-			int type = DataUtil.readUnsignedShortLittleEndian(input);
-			int size = DataUtil.readUnsignedShortLittleEndian(input);
+			int type = DataUtil.readUnsignedShortLittleEndian(buf, pos);
+			int size = DataUtil.readUnsignedShortLittleEndian(buf, pos + 2);
+			pos += 4;
 			len -= 4;
 			switch (type) {
 			case 0x0001:
 				if (size != 3*8) {
-					LCCore.getApplication().getDefaultLogger().error("Unexpected size for NTFS attribute 1: found "+size+" exepected is 24: "+input.getSourceDescription());
-					input.skip(size);
+					LCCore.getApplication().getDefaultLogger().error("Unexpected size for NTFS attribute 1: found "+size+" exepected is 24");
+					pos += size;
 					len -= size;
 					break;
 				}
@@ -280,81 +459,71 @@ class ZipArchiveRecords {
 				cal.setTimeZone(TimeZone.getTimeZone("GMT"));
 				cal.set(1601, 0, 1, 0, 0, 0);
 				long diff = cal.getTimeInMillis();
-				header.lastModificationTimestamp = DataUtil.readLongLittleEndian(input)/10000+diff;
-				header.lastAccessTimestamp = DataUtil.readLongLittleEndian(input)/10000+diff;
-				header.creationTimestamp = DataUtil.readLongLittleEndian(input)/10000+diff;
-				len -= 8*3;
+				header.lastModificationTimestamp = DataUtil.readLongLittleEndian(buf, pos)/10000+diff;
+				header.lastAccessTimestamp = DataUtil.readLongLittleEndian(buf, pos + 8)/10000+diff;
+				header.creationTimestamp = DataUtil.readLongLittleEndian(buf, pos + 16)/10000+diff;
+				pos += 24;
+				len -= 24;
 				break;
 			default:
 				LCCore.getApplication().getDefaultLogger().warn("Unknown NTFS attribute "+type);
-				input.skip(size);
+				pos += size;
 				len -= size;
 				break;
 			}
 		}
 	}
-	static void readExtraFieldUNIX(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
+	
+	static void readExtraFieldUNIX(ZippedFile header, byte[] buf, int pos, int len) {
 		if (len < 12) {
-			LCCore.getApplication().getDefaultLogger().error("Unexpected size of UNIX info: found "+len+", expected is at least 12: "+input.getSourceDescription());
-			input.skip(len);
+			LCCore.getApplication().getDefaultLogger().error("Unexpected size of UNIX info: found "+len+", expected is at least 12");
 			return;
 		}
-		header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
-		header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
-		header.userID = DataUtil.readUnsignedShortLittleEndian(input);
-		header.groupID = DataUtil.readUnsignedShortLittleEndian(input);
-		if (len > 12)
-			input.skip(len-12);
+		header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos)*1000;
+		header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 4)*1000;
+		header.userID = DataUtil.readUnsignedShortLittleEndian(buf, pos + 8);
+		header.groupID = DataUtil.readUnsignedShortLittleEndian(buf, pos + 10);
 	}
-	static void readExtraFieldUnix1(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
+	
+	static void readExtraFieldUnix1(ZippedFile header, byte[] buf, int pos, int len) {
 		if (len < 8) {
-			LCCore.getApplication().getDefaultLogger().error("Unexpected size of Unix1 info: found "+len+", expected is at least 8: "+input.getSourceDescription());
-			input.skip(len);
+			LCCore.getApplication().getDefaultLogger().error("Unexpected size of Unix1 info: found "+len+", expected is at least 8");
 			return;
 		}
-		header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
-		header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
+		header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos)*1000;
+		header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 4)*1000;
 		if (len > 8) {
-			header.userID = DataUtil.readUnsignedShortLittleEndian(input);
-			header.groupID = DataUtil.readUnsignedShortLittleEndian(input);
+			header.userID = DataUtil.readUnsignedShortLittleEndian(buf, pos + 8);
+			header.groupID = DataUtil.readUnsignedShortLittleEndian(buf, pos + 10);
 		}
 	}
-	static void readExtraFieldUnix2(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
+	
+	static void readExtraFieldUnix2(ZippedFile header, byte[] buf, int pos, int len) {
 		if (len > 0) {
-			header.userID = DataUtil.readUnsignedShortLittleEndian(input);
-			header.groupID = DataUtil.readUnsignedShortLittleEndian(input);
+			header.userID = DataUtil.readUnsignedShortLittleEndian(buf, pos);
+			header.groupID = DataUtil.readUnsignedShortLittleEndian(buf, pos + 2);
 		}
 	}
-	static void readExtraFieldUnixN(/*ZippedFile header, */int len, IO.Readable.Buffered input) throws IOException {
-		input.skip(len);
-		/*
-Value         Size        Description
- -----         ----        -----------
- 0x7875        Short       tag for this extra block type ("ux")
- TSize         Short       total data size for this block
- Version       1 byte      version of this extra field, currently 1
- UIDSize       1 byte      Size of UID field
- UID           Variable    UID for this entry (little endian)
- GIDSize       1 byte      Size of GID field
- GID           Variable    GID for this entry (little endian)
-		 */
-	}
-	static void readExtraFieldExtendedTimestamp(ZippedFile header, int len, IO.Readable.Buffered input) throws IOException {
-		int bits = input.read();
+	
+	static void readExtraFieldExtendedTimestamp(ZippedFile header, byte[] buf, int pos, int len) {
+		byte bits = buf[pos];
+		pos++;
 		len--;
 		if (len > 0 && (bits & 1) != 0) {
-			header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
+			header.lastModificationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos)*1000;
+			pos += 4;
 			len -= 4; 
 		}
 		if (len > 0 && (bits & 2) != 0) {
-			header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
+			header.lastAccessTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos)*1000;
+			pos += 4;
 			len -= 4; 
 		}
 		if (len > 0 && (bits & 4) != 0) {
-			header.creationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(input)*1000;
+			header.creationTimestamp = DataUtil.readUnsignedIntegerLittleEndian(buf, pos)*1000;
+			pos += 4;
 			len -= 4; 
 		}
-		if (len > 0) input.skip(len);
 	}
 	
 	static class EndOfCentralDirectory {

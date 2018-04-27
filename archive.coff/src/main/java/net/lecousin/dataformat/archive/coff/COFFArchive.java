@@ -5,19 +5,20 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.progress.WorkProgress;
 
 public class COFFArchive {
 
-	public static final Log logger = LogFactory.getLog(COFFArchive.class);
+	public static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(COFFArchive.class);
+	}
 	
 	public static class COFFFile {
 		public String name;

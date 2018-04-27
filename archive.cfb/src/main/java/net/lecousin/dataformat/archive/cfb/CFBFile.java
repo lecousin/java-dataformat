@@ -5,6 +5,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -14,18 +15,18 @@ import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.BufferedIO;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
 import net.lecousin.framework.mutable.MutableLong;
 import net.lecousin.framework.progress.WorkProgress;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 public class CFBFile implements Closeable {
-	
-	public static final Log logger = LogFactory.getLog("CFBFile");
 
+	public static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(CFBFile.class);
+	}
+	
 	public static class CFBSubFile {
 		String name;
 		FragmentedRangeLong fragments;
@@ -78,6 +79,7 @@ public class CFBFile implements Closeable {
 			this.header = header;
 			this.progress = progress;
 			this.work = work;
+			logger = getLogger();
 			readHeader.listenInline(new AsyncWorkListener<Integer, IOException>() {
 				@Override
 				public void ready(Integer result) {
@@ -108,6 +110,7 @@ public class CFBFile implements Closeable {
 		private CFB_DIFAT difat;
 		private WorkProgress progress;
 		private long work;
+		private Logger logger;
 		
 		private class Init extends Task.Cpu<Void,NoException> {
 			private Init() {
@@ -186,7 +189,7 @@ public class CFBFile implements Closeable {
 				}
 				int name_size = DataUtil.readUnsignedShortLittleEndian(sector_buf, entryIndex*128 + 0x40);
 				if (name_size > 0x40) {
-					if (logger.isErrorEnabled())
+					if (logger.error())
 						logger.error("Invalid file name size ("+name_size+"): maximum is 64, in Compound file "+io.getSourceDescription());
 					name_size = 0x40;
 				}

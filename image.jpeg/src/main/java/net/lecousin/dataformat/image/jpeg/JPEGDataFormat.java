@@ -2,11 +2,9 @@ package net.lecousin.dataformat.image.jpeg;
 
 import java.io.IOException;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.image.ImageDataFormat;
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
@@ -14,10 +12,13 @@ import net.lecousin.framework.io.IO.Seekable.SeekType;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.log.Logger;
 
 public class JPEGDataFormat extends ImageDataFormat {
 
-	public static final Log logger = LogFactory.getLog("JPEG");
+	static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(JPEGDataFormat.class);
+	}
 	
 	public static final JPEGDataFormat instance = new JPEGDataFormat();
 	private JPEGDataFormat() {}
@@ -55,6 +56,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 			this.open = open;
 		}
 		private AsyncWork<T,Exception> open;
+		private Logger logger = getLogger();
 		@Override
 		public JPEGInfo run() throws Exception {
 			JPEGInfo info = new JPEGInfo();
@@ -62,7 +64,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 				io.skip(2);
 				readNextMarker(io, info);
 			} catch (IOException e) {
-				if (logger.isDebugEnabled())
+				if (logger.debug())
 					logger.debug("Error parsing JPEG file", e);
 				throw e;
 			}
@@ -76,7 +78,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 				b = io.read();
 				if (b < 0) return;
 				if (b != 0xFF) {
-					if (logger.isDebugEnabled())
+					if (logger.debug())
 						logger.debug("Unexpected value "+b+" in JPEG file at "+io.getPosition()+", expected is 255 in "+io.getSourceDescription());
 					return;
 				}
@@ -122,7 +124,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 					readComment(io, info);
 					break;
 				default:
-					if (logger.isDebugEnabled())
+					if (logger.debug())
 						logger.debug("Unknown JPEG Marker "+b+" at "+io.getPosition()+" in "+io.getSourceDescription());
 					// let's do like we know this tag
 					size = DataUtil.readUnsignedShortBigEndian(io);

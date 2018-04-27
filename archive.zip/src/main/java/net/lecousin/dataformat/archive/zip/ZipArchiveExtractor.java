@@ -2,15 +2,15 @@ package net.lecousin.dataformat.archive.zip;
 
 import java.io.IOException;
 
-import net.lecousin.dataformat.archive.zip.ZipArchive.ZippedFile;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Seekable.SeekType;
 import net.lecousin.framework.io.buffering.BufferedReverseIOReading;
 import net.lecousin.framework.io.buffering.PreBufferedReadable;
+import net.lecousin.framework.log.Logger;
 
 class ZipArchiveExtractor {
 
@@ -32,6 +32,7 @@ class ZipArchiveExtractor {
 		}
 		@Override
 		public Void run() {
+			Logger logger = ZipArchive.getLogger();
 			long start = System.nanoTime();
 			// we start from the end of the file
 			// first, we should find the end of central directory
@@ -91,26 +92,18 @@ class ZipArchiveExtractor {
 						}
 					} else
 						io_buf = new PreBufferedReadable(zip_io, 1024, getPriority(), 8192, getPriority(), 8);
-					io_buf.canStartReading().listenAsync(new Task.Cpu<Void,NoException>("Reading Zip End of Central Directory: "+zip.io.getSourceDescription(), zip.io.getPriority()) {
-						@Override
-						public Void run() {
-							try {
-								ZipArchiveRecords.readCentralDirectory(io_buf, false, null, new Listener<ZipArchive.ZippedFile>() {
-									@Override
-									public void fire(ZippedFile event) {
-										zip.centralDirectory.add(event);
-									}
-								});
-							} catch (Exception e) {
-								done.unblockError(e);
-								return null;
-							}
-							if (ZipArchive.logger.isDebugEnabled())
-								ZipArchive.logger.debug("Zip analyzed in "+(System.nanoTime()-start)/1000000+"ms.");
-							done.unblockSuccess(null);
-							return null;
-						}
-					}, true);
+					SynchronizationPoint<IOException> cd = ZipArchiveRecords.readCentralDirectory(io_buf, (entry) -> {
+						zip.centralDirectory.add(entry);
+					});
+					cd.listenInline(() -> {
+						if (logger.debug())
+							logger.debug("Zip analyzed in "+(System.nanoTime()-start)/1000000+"ms.");
+						done.unblockSuccess(null);
+					}, (error) -> {
+						done.unblockError(error);
+					}, (cancel) -> {
+						done.cancel(cancel);
+					});
 				}
 			});
 			return null;

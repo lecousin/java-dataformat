@@ -65,7 +65,7 @@ class Rar5Loader extends RarLoader {
 					return null;
 				}
 				if (canStart.hasError()) {
-					RarArchive.logger.error("Error initializing RAR5 loader", canStart.getError());
+					RarArchive.getLogger().error("Error initializing RAR5 loader", canStart.getError());
 					rar.contentLoaded.error(canStart.getError());
 					return null;
 				}
@@ -187,11 +187,11 @@ class Rar5Loader extends RarLoader {
 			// TODO unknown
 			readBlock(io, h.dataOffset+h.dataSize, b, bb, progress, work);
 		} catch (EOFException e) {
-			RarArchive.logger.error("Unexpected end of file while reading RAR 5 block at "+pos, e);
+			RarArchive.getLogger().error("Unexpected end of file while reading RAR 5 block at "+pos, e);
 			rar.contentLoaded.error(new IOException("Unexpected end of file"));
 			return;
 		} catch (IOException e) {
-			RarArchive.logger.error("Error reading RAR 5 block at "+pos, e);
+			RarArchive.getLogger().error("Error reading RAR 5 block at "+pos, e);
 			rar.contentLoaded.error(e);
 			return;
 		}
@@ -276,7 +276,7 @@ class Rar5Loader extends RarLoader {
 			if (progress != null) progress.progress(w);
 			rar.contentLoaded.unblock();
 		} catch (IOException e) {
-			RarArchive.logger.error("Error reading RAR 5 Quick Open block", e);
+			RarArchive.getLogger().error("Error reading RAR 5 Quick Open block", e);
 			rar.contentLoaded.error(e);
 		}
 	}

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import net.lecousin.compression.deflate.DeflateReadable;
 import net.lecousin.dataformat.archive.zip.ZipArchiveRecords.EndOfCentralDirectory;
 import net.lecousin.dataformat.archive.zip.ZipArchiveScanner.EntryListener;
+import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -24,13 +25,13 @@ import net.lecousin.framework.io.SubIO;
 import net.lecousin.framework.io.buffering.BufferedIO;
 import net.lecousin.framework.io.buffering.PreBufferedReadable;
 import net.lecousin.framework.io.provider.IOProvider;
-
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
+import net.lecousin.framework.log.Logger;
 
 public class ZipArchive implements Closeable {
 	
-	public static final Log logger = LogFactory.getLog("dataformat.zip");
+	static Logger getLogger() {
+		return LCCore.getApplication().getLoggerFactory().getLogger(ZipArchive.class);
+	}
 	
 	// format spec: https://pkware.cachefly.net/webdocs/casestudies/APPNOTE.TXT
 	// version implemented: 6.3.4
@@ -113,21 +114,17 @@ public class ZipArchive implements Closeable {
 			public void endOfCentralDirectoryFound(EndOfCentralDirectory end) {
 			}
 		});
-		scanner.start();
-		scanner.getOutput().listenInline(new AsyncWorkListener<Void, IOException>() {
-			@Override
-			public void ready(Void result) {
+		scanner.scan().listenInline(
+			() -> {
 				listener.endOfScan();
-			}
-			@Override
-			public void error(IOException error) {
+			},
+			(error) -> {
 				listener.error(error);
-			}
-			@Override
-			public void cancelled(CancelException event) {
+			},
+			(cancel) -> {
 				listener.endOfScan();
 			}
-		});
+		);
 	}
 	
 	private ZipArchive(IO.Readable io) {
@@ -147,15 +144,14 @@ public class ZipArchive implements Closeable {
 				endOfCentralDirectory = end;
 			}
 		});
-		scan.start();
-		scan.getOutput().listenInline(new Runnable() {
+		loaded = scan.scan();
+		loaded.listenInline(new Runnable() {
 			@Override
 			public void run() {
 				ZipArchive.this.io.closeAsync();
 				ZipArchive.this.io = null;
 			}
 		});
-		loaded = scan.getOutput();
 	}
 	private ZipArchive(IO.Readable io, IOProvider.Readable ioProvider) {
 		this(io);
@@ -195,8 +191,9 @@ public class ZipArchive implements Closeable {
 						endOfCentralDirectory = end;
 					}
 				});
-				scan.startOn(restart, false);
-				scan.getOutput().listenInline((SynchronizationPoint<IOException>)loaded);
+				restart.listenAsync(new Task.Cpu.FromRunnable("Scan ZIP file", io.getPriority(), () -> {
+					scan.scan().listenInline((SynchronizationPoint<IOException>)loaded);
+				}), loaded);
 			}
 		});
 	}
@@ -212,6 +209,7 @@ public class ZipArchive implements Closeable {
 	EndOfCentralDirectory endOfCentralDirectory;
 	ArrayList<ZippedFile> centralDirectory = new ArrayList<>();
 	HashMap<Long,ZippedFile> localEntries = new HashMap<>();
+	Logger logger = getLogger();
 	
 	public ISynchronizationPoint<IOException> getSynchOnReady() {
 		return loaded;
@@ -290,7 +288,8 @@ public class ZipArchive implements Closeable {
 				} else if (zip.ioProvider != null) {
 					opened = zip.ioProvider.provideIOReadable(priority);
 					input = new PreBufferedReadable(opened, 512, priority, 8192, priority, 10);
-					skip = input.skipAsync(offset);
+					if (offset > 0)
+						skip = input.skipAsync(offset);
 				} else
 					throw new IOException("Zip must be open for extraction");
 			} catch (IOException e) {
@@ -300,7 +299,7 @@ public class ZipArchive implements Closeable {
 			IO.Readable.Buffered i = input;
 			IO.Readable o = opened;
 			AsyncWork<Long,IOException> s = skip;
-			Task<Void,NoException> task = new Task.Cpu<Void, NoException>("Read zip local entry",priority) {
+			Task<Void,NoException> task = new Task.Cpu<Void, NoException>("Read zip local entry", priority) {
 				@Override
 				public Void run() {
 					if (s != null && s.hasError()) {
@@ -308,29 +307,31 @@ public class ZipArchive implements Closeable {
 						sp.unblockError(s.getError());
 						return null;
 					}
-					try {
-						localEntry = ZipArchiveRecords.readLocalFileEntry(i, false, offset);
-					} catch (IOException e) {
-						if (o != null) try { o.close(); } catch (Throwable t) {}
-						sp.unblockError(e);
-						return null;
-					}
-					uncompress2(zip, priority, i).listenInline(new AsyncWorkListener<IO.Readable, IOException>() {
-						@Override
-						public void ready(Readable result) {
-							sp.unblockSuccess(result);
+					AsyncWork<ZippedFile, IOException> readEntry = ZipArchiveRecords.readLocalFileEntry(i, false, offset);
+					readEntry.listenAsync(new Task.Cpu.FromRunnable("Uncompress zip entry", priority, () -> {
+						if (readEntry.hasError()) {
+							if (o != null) try { o.close(); } catch (Throwable t) {}
+							sp.unblockError(readEntry.getError());
+							return;
 						}
-						@Override
-						public void error(IOException error) {
-							if (o != null) o.closeAsync();
-							sp.unblockError(error);
-						}
-						@Override
-						public void cancelled(CancelException event) {
-							if (o != null) o.closeAsync();
-							sp.unblockCancel(event);
-						}
-					});
+						localEntry = readEntry.getResult();
+						uncompress2(zip, priority, i).listenInline(new AsyncWorkListener<IO.Readable, IOException>() {
+							@Override
+							public void ready(Readable result) {
+								sp.unblockSuccess(result);
+							}
+							@Override
+							public void error(IOException error) {
+								if (o != null) o.closeAsync();
+								sp.unblockError(error);
+							}
+							@Override
+							public void cancelled(CancelException event) {
+								if (o != null) o.closeAsync();
+								sp.unblockCancel(event);
+							}
+						});
+					}), true);
 					return null;
 				}
 			};
@@ -343,6 +344,8 @@ public class ZipArchive implements Closeable {
 		
 		@SuppressWarnings("resource")
 		private AsyncWork<IO.Readable,IOException> uncompress2(ZipArchive zip, byte priority, IO.Readable.Buffered input) {
+			if (zip.logger.debug())
+				zip.logger.debug("Start unzipping entry " + filename + " from " + localEntry.offset + " + " + localEntry.headerLength);
 			// compressed stream
 			AsyncWork<Long,IOException> skip = null;
 			IO.Readable uncompressed;

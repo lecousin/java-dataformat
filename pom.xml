@@ -81,11 +81,6 @@
 	  		<artifactId>ui-description</artifactId>
 	  		<version>0.1.0</version>
 	  	</dependency>
-	  	<dependency>
-	  		<groupId>commons-logging</groupId>
-	  		<artifactId>commons-logging</artifactId>
-	  		<version>1.2</version>
-	  	</dependency>
   	</dependencies>
   </dependencyManagement>
   
