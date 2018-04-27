@@ -55,7 +55,7 @@ public class OpenOfficeDetector implements DataFormatSpecializationDetector {
 				}
 				try {
 					int count = 0;
-					Task<UnprotectedStringBuffer,IOException> mimetypeRead = null;
+					AsyncWork<UnprotectedStringBuffer,IOException> mimetypeRead = null;
 					for (ZipArchive.ZippedFile file : zip.getResult().get().getZippedFiles()) {
 						switch (file.getFilename()) {
 						case "content.xml":
@@ -78,8 +78,8 @@ public class OpenOfficeDetector implements DataFormatSpecializationDetector {
 					}
 					if (count == 4) {
 						if (mimetypeRead != null) {
-							Task<UnprotectedStringBuffer,IOException> task = mimetypeRead;
-							mimetypeRead.getOutput().listenInline(new Runnable() {
+							AsyncWork<UnprotectedStringBuffer,IOException> task = mimetypeRead;
+							mimetypeRead.listenInline(new Runnable() {
 								@Override
 								public void run() {
 									if (!task.isSuccessful()) {

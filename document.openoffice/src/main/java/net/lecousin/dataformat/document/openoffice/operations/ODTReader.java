@@ -65,7 +65,7 @@ public class ODTReader implements DataFormatReadOperation.OneToOne<OpenDocumentT
 				if (open.hasError()) { result.error(open.getError()); return null; }
 				if (open.isCancelled()) { result.cancel(open.getCancelEvent()); return null; }
 				try {
-					OdfTextDocument doc = OdfTextDocument.loadDocument(IOAsInputStream.get(open.getResult()));
+					OdfTextDocument doc = OdfTextDocument.loadDocument(IOAsInputStream.get(open.getResult(), true));
 					result.unblockSuccess(new Pair<>(doc, null));
 				} catch (Exception e) {
 					result.error(e);

@@ -61,7 +61,7 @@ public class JPEGReaderOp implements DataFormatReadOperation.OneToOne<JPEGDataFo
 					throw open.getError();
 				if (progress != null) progress.progress(work/5);
 				try (IO.Readable.Seekable io = open.getResult()) {
-					return new Pair<>(ImageIO.read(IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work - work/5))), null);
+					return new Pair<>(ImageIO.read(IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work - work/5), true)), null);
 				} catch (Throwable t) {
 					throw new Exception("Error reading JPEG data", t);
 				} finally {

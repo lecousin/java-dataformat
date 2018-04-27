@@ -47,7 +47,7 @@ public class WordOpenXMLFormat extends OpenXMLFormat {
 		@SuppressWarnings("resource")
 		@Override
 		protected AsyncWork<XWPFDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work));
+			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work), true);
 			try { return new AsyncWork<>(new XWPFDocument(is), null); }
 			catch (Exception e) { return new AsyncWork<>(null, e); }
 			finally {

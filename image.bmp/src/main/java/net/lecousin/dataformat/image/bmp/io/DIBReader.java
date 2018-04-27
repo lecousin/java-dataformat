@@ -357,7 +357,7 @@ public class DIBReader {
 						@Override
 						public BufferedImage run() throws Exception {
 							SubIO.Readable sub = new SubIO.Readable(input, header.bitmapSize, "JPEG inside BMP: " + input.getSourceDescription(), false);
-							return ImageIO.read(IOAsInputStream.get(sub));
+							return ImageIO.read(IOAsInputStream.get(sub, true));
 						}
 					};
 					task.start();

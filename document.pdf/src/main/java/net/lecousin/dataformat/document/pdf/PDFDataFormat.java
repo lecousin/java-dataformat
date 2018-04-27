@@ -52,7 +52,7 @@ public class PDFDataFormat implements DataFormat {
 		@SuppressWarnings("resource")
 		@Override
 		protected AsyncWork<PDDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work));
+			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work), true);
 			PDDocument pdf;
 			try { pdf = PDDocument.load(is); }
 			catch (Exception e) {

@@ -537,7 +537,7 @@ public class PNGReader {
 				io.canStartReading().listenAsync(new Task.Cpu<Void, NoException>("Reading ICC Profile in PNG",data.io.getPriority()) {
 					@Override
 					public Void run() {
-						InputStream in = IOAsInputStream.get(io);
+						InputStream in = IOAsInputStream.get(io, true);
 						try {
 							ICC_Profile profile = ICC_Profile.getInstance(in);
 							done.unblockSuccess(profile);

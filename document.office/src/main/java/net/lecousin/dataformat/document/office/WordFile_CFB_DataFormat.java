@@ -180,7 +180,7 @@ public class WordFile_CFB_DataFormat extends CFBDataFormat {
 		@SuppressWarnings("resource")
 		@Override
 		protected AsyncWork<HWPFDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work));
+			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work), true);
 			try { return new AsyncWork<>(new HWPFDocument(is), null); }
 			catch (Exception e) { return new AsyncWork<>(null, e); }
 			finally {
