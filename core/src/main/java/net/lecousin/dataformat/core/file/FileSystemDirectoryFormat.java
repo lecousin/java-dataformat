@@ -9,9 +9,11 @@ import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
+import net.lecousin.dataformat.core.actions.CreateContainerDataAction;
 import net.lecousin.dataformat.core.actions.CreateDataAction;
 import net.lecousin.dataformat.core.actions.RemoveDataAction;
 import net.lecousin.dataformat.core.actions.RenameDataAction;
+import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -38,9 +40,8 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 		return new AsyncWork<>(null, null);
 	}
 
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/images/folder_", ".png", 16, 24, 32, 48, 64, 256);
 	@Override
-	public IconProvider getIconProvider() { return iconProvider; }
+	public IconProvider getIconProvider() { return DataIcons.ICON_FOLDER; }
 
 	@Override
 	public String[] getFileExtensions() {
@@ -55,6 +56,11 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 	@Override
 	public CreateDataAction<?, ?> getCreateNewDataAction(Data container) {
 		return CreateFileAction.instance;
+	}
+	
+	@Override
+	public CreateContainerDataAction<?, ?> getCreateNewContainerDataAction(Data containerData) {
+		return CreateDirectoryAction.instance;
 	}
 
 	@Override

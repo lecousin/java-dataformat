@@ -2,6 +2,7 @@ package net.lecousin.dataformat.core;
 
 import java.util.List;
 
+import net.lecousin.dataformat.core.actions.CreateContainerDataAction;
 import net.lecousin.dataformat.core.actions.CreateDataAction;
 import net.lecousin.dataformat.core.actions.DataAction;
 import net.lecousin.dataformat.core.actions.RemoveDataAction;
@@ -24,6 +25,10 @@ public interface ContainerDataFormat extends DataFormat {
 	public DataCommonProperties getSubDataCommonProperties(Data subData);
 	
 	public default CreateDataAction<?, ?> getCreateNewDataAction(@SuppressWarnings("unused") Data containerData) {
+		return null;
+	}
+	
+	public default CreateContainerDataAction<?, ?> getCreateNewContainerDataAction(@SuppressWarnings("unused") Data containerData) {
 		return null;
 	}
 	

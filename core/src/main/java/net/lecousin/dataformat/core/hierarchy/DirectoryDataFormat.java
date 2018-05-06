@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
+import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -29,9 +30,8 @@ public class DirectoryDataFormat  implements ContainerDataFormat.ContainerDirect
 		return new AsyncWork<>(null, null);
 	}
 
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/images/folder_", ".png", 16, 24, 32, 48, 64, 256);
 	@Override
-	public IconProvider getIconProvider() { return iconProvider; }
+	public IconProvider getIconProvider() { return DataIcons.ICON_FOLDER; }
 
 	@Override
 	public String[] getFileExtensions() {

@@ -6,7 +6,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Readable.Seekable;
 
-public class DirectoryData extends Data {
+public class DirectoryData extends Data implements IDirectoryData {
 
 	public DirectoryData(Data parent, ContainerDataFormat containerFormat, String name) {
 		this.parent = parent;

@@ -3,6 +3,7 @@ package net.lecousin.dataformat.core.file;
 import java.io.File;
 
 import net.lecousin.dataformat.core.Data;
+import net.lecousin.dataformat.core.hierarchy.IDirectoryData;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -13,13 +14,22 @@ import net.lecousin.framework.memory.SimpleCache;
 import net.lecousin.framework.util.Provider.FromValue;
 
 public class FileData extends Data {
+	
+	public static class DirectoryData extends FileData implements IDirectoryData {
+		private DirectoryData(File file) {
+			super(file, true);
+		}
+	}
 
 	private static SimpleCache<File,FileData> cache;
 	static {
 		cache = new SimpleCache<>("FileData", new FromValue<File, FileData>() {
 			@Override
 			public FileData provide(File file) {
-				return new FileData(file);
+				boolean dir = file.isDirectory();
+				if (dir)
+					return new DirectoryData(file);
+				return new FileData(file, false);
 			}
 		});
 		LCCore.get().toClose(cache);
@@ -39,9 +49,9 @@ public class FileData extends Data {
 		removeFromCache();
 	}
 	
-	private FileData(File file) {
+	protected FileData(File file, boolean isDirectory) {
 		this.file = file;
-		this.isDirectory = file.isDirectory();
+		this.isDirectory = isDirectory;
 		if (this.isDirectory)
 			setFormat(FileSystemDirectoryFormat.instance);
 	}

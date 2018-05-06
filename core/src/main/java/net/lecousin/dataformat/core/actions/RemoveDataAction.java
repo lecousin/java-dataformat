@@ -3,6 +3,7 @@ package net.lecousin.dataformat.core.actions;
 import java.util.List;
 
 import net.lecousin.dataformat.core.Data;
+import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
@@ -16,7 +17,7 @@ public abstract class RemoveDataAction<TError extends Exception> implements Data
 	
 	@Override
 	public IconProvider iconProvider() {
-		return new IconProvider.FromPath("net/lecousin/dataformat/core/images/file_delete_", ".png", 16, 32, 48, 64, 128);
+		return DataIcons.ICON_REMOVE_FILE;
 	}
 	
 	@Override

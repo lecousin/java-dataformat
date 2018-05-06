@@ -195,8 +195,8 @@ public class TarDataFormat extends ArchiveDataFormat {
 				}
 				continue;
 			}
-			if (p.startsWith(path + '/')) {
-				p = p.substring(path.length() + 1);
+			if (p.startsWith(path)) {
+				p = p.substring(path.length());
 				i = p.indexOf('/');
 				if (i > 0) {
 					name = p.substring(0, i);

@@ -1,6 +1,7 @@
 directory=directory
 empty=empty
 file type=file type
+new directory=new directory
 new file=new file
 remove=remove
 rename=rename

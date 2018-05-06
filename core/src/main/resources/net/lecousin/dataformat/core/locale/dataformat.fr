@@ -1,6 +1,7 @@
 directory=répertoire
 empty=vide
 file type=type de fichier
+new directory=nouveau répertoire
 new file=nouveau fichier
 remove=supprimer
 rename=renommer

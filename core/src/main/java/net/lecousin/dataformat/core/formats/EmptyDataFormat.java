@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.actions.InitNewDataAction;
+import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
@@ -29,9 +30,8 @@ public class EmptyDataFormat implements DataFormat {
 		return null;
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/core/images/blank_", ".png", 16, 32, 48, 64, 128);
 	@Override
-	public IconProvider getIconProvider() { return iconProvider; }
+	public IconProvider getIconProvider() { return DataIcons.ICON_BLANK_FILE; }
 
 	public static final String[] nothing = new String[0];
 	@Override
