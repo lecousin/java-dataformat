@@ -13,7 +13,6 @@ import net.lecousin.dataformat.core.actions.CreateContainerDataAction;
 import net.lecousin.dataformat.core.actions.CreateDataAction;
 import net.lecousin.dataformat.core.actions.RemoveDataAction;
 import net.lecousin.dataformat.core.actions.RenameDataAction;
-import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
@@ -22,6 +21,8 @@ import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
+import net.lecousin.framework.ui.iconset.IconSet;
+import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerDirectory {
@@ -41,7 +42,9 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 	}
 
 	@Override
-	public IconProvider getIconProvider() { return DataIcons.ICON_FOLDER; }
+	public IconProvider getIconProvider() {
+		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_FOLDER);
+	}
 
 	@Override
 	public String[] getFileExtensions() {

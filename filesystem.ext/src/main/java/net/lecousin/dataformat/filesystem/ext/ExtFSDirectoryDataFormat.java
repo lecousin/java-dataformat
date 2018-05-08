@@ -4,12 +4,13 @@ import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.dataformat.core.util.DataIcons;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.ui.iconset.IconSet;
+import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class ExtFSDirectoryDataFormat implements ContainerDataFormat.ContainerDirectory {
@@ -24,7 +25,9 @@ public class ExtFSDirectoryDataFormat implements ContainerDataFormat.ContainerDi
 	}
 
 	@Override
-	public IconProvider getIconProvider() { return DataIcons.ICON_FOLDER; }
+	public IconProvider getIconProvider() {
+		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_FOLDER);
+	}
 
 	@Override
 	public String[] getFileExtensions() {

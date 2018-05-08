@@ -18,6 +18,7 @@ public abstract class RenameDataAction<TParam extends RenameDataAction.Param, TE
 	
 	@Override
 	public IconProvider iconProvider() {
+		// TODO from icon set
 		return new IconProvider.FromPath("net/lecousin/dataformat/core/images/rename_", ".png", 16);
 	}
 	
