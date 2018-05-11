@@ -20,20 +20,7 @@ public interface Operation<Input,Output,Parameters> extends IOperation<Parameter
 		public void release(Pair<Output,Object> output);
 	}
 	
-	public static interface OneToMany<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.OneToMany {
-		/**
-		 * Initialize the operation, and return an object (or null) that must be passed to the releaseOperation method at the end of the operation
-		 */
-		public AsyncWork<Object, ? extends Exception> initOperation(Input input, Parameters params, byte priority, WorkProgress progress, long work);
-		/** If known return the number of outputs that will be generated, or -1 if not known. */
-		public int getNbOutputs(Object operation);
-		/**
-		 * Produce the next output. If the operation is finished, return an AsyncWork with a null result. 
-		 */
-		public AsyncWork<Output, ? extends Exception> nextOutput(Object operation, byte priority, WorkProgress progress, long work);
-		
-		public void releaseOutput(Output output);
-		public void releaseOperation(Object operation);
+	public static interface OneToMany<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.OneToMany<Input, Parameters, Output> {
 	}
 	
 	public static interface ManyToOne<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.ManyToOne {
@@ -45,22 +32,7 @@ public interface Operation<Input,Output,Parameters> extends IOperation<Parameter
 		public void release(Pair<Output,Object> output);
 	}
 	
-	public static interface ManyToMany<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.ManyToMany {
-		/**
-		 * Initialize the operation, and return an object (or null) that must be passed to the releaseOperation method at the end of the operation.
-		 * The inputProvider each time it needs a new input.
-		 * The inputProvider must return an AsyncWork with a null result when no more input is available and the operation should end.
-		 */
-		public AsyncWork<Object, ? extends Exception> initOperation(Provider<AsyncWork<Input,? extends Exception>> inputProvider, int nbInputs, Parameters params, byte priority, WorkProgress progress, long work);
-		/** If known return the number of outputs that will be generated, or -1 if not known. */
-		public int getNbOutputs(Object operation);
-		/**
-		 * Produce the next output. If the operation is finished, return an AsyncWork with a null result. 
-		 */
-		public AsyncWork<Output, ? extends Exception> nextOutput(Object operation, byte priority, WorkProgress progress, long work);
-		
-		public void releaseOutput(Output output);
-		public void releaseOperation(Object operation);
+	public static interface ManyToMany<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.ManyToMany<Input, Parameters, Output> {
 	}
 	
 	@SuppressWarnings("rawtypes")

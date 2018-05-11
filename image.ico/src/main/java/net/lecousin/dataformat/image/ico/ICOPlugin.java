@@ -28,6 +28,8 @@ public class ICOPlugin implements DataFormatPlugin {
 	@Override
 	public IOperation<?>[] getOperations() {
 		return new IOperation<?>[] {
+			new ExtractBiggestImageOp.ICO(),
+			new ExtractBiggestImageOp.CUR()
 		};
 	}
 	
