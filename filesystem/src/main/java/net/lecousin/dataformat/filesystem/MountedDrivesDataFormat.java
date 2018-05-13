@@ -25,6 +25,7 @@ import net.lecousin.framework.system.hardware.DiskPartition;
 import net.lecousin.framework.system.hardware.Drive;
 import net.lecousin.framework.system.hardware.Drives;
 import net.lecousin.framework.system.hardware.Drives.DriveListener;
+import net.lecousin.framework.ui.iconset.hardware.HardwareIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class MountedDrivesDataFormat implements ContainerDataFormat {
@@ -157,7 +158,7 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 
 	@Override
 	public IconProvider getIconProvider() {
-		return Icons.hdd;
+		return HardwareIconSet.Icons.HARD_DISK_INTERNAL.get();
 	}
 
 	@Override

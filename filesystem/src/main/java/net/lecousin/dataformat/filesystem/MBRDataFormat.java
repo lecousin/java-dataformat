@@ -21,6 +21,7 @@ import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.system.hardware.DiskPartition;
 import net.lecousin.framework.system.hardware.DiskPartitionsUtil;
+import net.lecousin.framework.ui.iconset.hardware.HardwareIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class MBRDataFormat implements ContainerDataFormat {
@@ -37,7 +38,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	
 	@Override
 	public IconProvider getIconProvider() {
-		return Icons.hdd;
+		return HardwareIconSet.Icons.HARD_DISK_INTERNAL.get();
 	}
 
 	@Override
