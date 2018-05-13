@@ -11,7 +11,6 @@ import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.ui.iconset.IconSet;
 import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -33,7 +32,7 @@ public class EmptyDataFormat implements DataFormat {
 	
 	@Override
 	public IconProvider getIconProvider() {
-		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_BLANK_FILE);
+		return FilesIconSet.Icons.BLANK_FILE.get();
 	}
 
 	public static final String[] nothing = new String[0];

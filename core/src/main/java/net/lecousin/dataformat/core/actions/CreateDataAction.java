@@ -2,7 +2,6 @@ package net.lecousin.dataformat.core.actions;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.ui.iconset.IconSet;
 import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
@@ -16,7 +15,7 @@ public abstract class CreateDataAction<TParam extends CreateDataAction.Param, TE
 	
 	@Override
 	public IconProvider iconProvider() {
-		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_NEW_FILE);
+		return FilesIconSet.Icons.NEW_FILE.get();
 	}
 	
 }

@@ -1,7 +1,6 @@
 package net.lecousin.dataformat.core.actions;
 
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.ui.iconset.IconSet;
 import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -14,7 +13,7 @@ public abstract class CreateContainerDataAction<TParam extends CreateContainerDa
 	
 	@Override
 	public IconProvider iconProvider() {
-		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_NEW_FOLDER);
+		return FilesIconSet.Icons.NEW_FOLDER.get();
 	}
 	
 }

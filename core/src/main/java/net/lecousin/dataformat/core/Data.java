@@ -494,16 +494,18 @@ public abstract class Data {
 				callDetectionCancelled(listener, null);
 				return;
 			}
-			if (formatListeners != null)
+			if (formatListeners != null) {
 				formatListeners.add(new Pair<>(listener, null));
-			else {
+				if (progress != null && detection != null)
+					WorkProgress.link(detection.progress, progress, work);
+			} else {
 				formatListeners = new ArrayList<>();
 				formatListeners.add(new Pair<>(listener, null));
 				detection = new Detection();
+				if (progress != null)
+					WorkProgress.link(detection.progress, progress, work);
 				detection.run(priority); // TODO be able to change priority when already running
 			}
-			if (progress != null && detection != null)
-				WorkProgress.link(detection.progress, progress, work);
 			cancel.listen(new Listener<Void>() {
 				@Override
 				public void fire(Void event) {

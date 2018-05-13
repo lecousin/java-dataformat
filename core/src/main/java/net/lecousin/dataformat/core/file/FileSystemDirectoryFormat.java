@@ -21,7 +21,6 @@ import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
-import net.lecousin.framework.ui.iconset.IconSet;
 import net.lecousin.framework.ui.iconset.files.FilesIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -43,7 +42,7 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 
 	@Override
 	public IconProvider getIconProvider() {
-		return IconSet.getIcon(FilesIconSet.class, FilesIconSet.ICON_FOLDER);
+		return FilesIconSet.Icons.FOLDER.get();
 	}
 
 	@Override

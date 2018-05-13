@@ -22,6 +22,10 @@ public interface IOperation<TParameters> {
 	
 	public interface OneToOne {}
 	public interface OneToMany<Input, Parameters, Output> {
+		/** The variable name indicates what is the kind of output.
+		 * For example, an operation extracting pages from a document will return 'page' so
+		 * outputs can be named page1, page2...
+		 */
 		public ILocalizableString getVariableName();
 		
 		/**
@@ -45,6 +49,10 @@ public interface IOperation<TParameters> {
 	}
 	public interface ManyToOne {}
 	public interface ManyToMany<Input, Parameters, Output> {
+		/** The variable name indicates what is the kind of output.
+		 * For example, an operation extracting pages from a document will return 'page' so
+		 * outputs can be named page1, page2...
+		 */
 		public ILocalizableString getVariableName();
 
 		/**
