@@ -72,6 +72,10 @@ public class DataFormatRegistry {
 				HeaderNextByte next = root.map[sig[sigIndex].bytes[0]&0xFF];
 				if (next == null)
 					next = root.map[sig[sigIndex].bytes[0]&0xFF] = new HeaderNextByte();
+				if (sig[sigIndex].bytes.length == 1 && sigIndex == sig.length - 1) {
+					next.detectorsToFinish.add(detector);
+					return;
+				}
 				for (int i = 1; i < sig[sigIndex].bytes.length; ++i) {
 					Object o = next.map.get(sig[sigIndex].bytes[i]);
 					if (o == null) {

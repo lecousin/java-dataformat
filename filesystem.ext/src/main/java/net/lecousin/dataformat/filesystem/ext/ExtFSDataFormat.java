@@ -1,6 +1,7 @@
 package net.lecousin.dataformat.filesystem.ext;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
@@ -207,7 +208,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	@Override
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
 		DataCommonProperties p = new DataCommonProperties();
-		p.size = Long.valueOf(((ExtFSData)subData).getSize());
+		p.size = BigInteger.valueOf(((ExtFSData)subData).getSize());
 		return p;
 	}
 

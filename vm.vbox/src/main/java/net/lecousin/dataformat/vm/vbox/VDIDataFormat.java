@@ -1,6 +1,7 @@
 package net.lecousin.dataformat.vm.vbox;
 
 import java.io.IOException;
+import java.math.BigInteger;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
@@ -122,7 +123,7 @@ public class VDIDataFormat implements DataWrapperDataFormat {
 	@Override
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
 		DataCommonProperties p = new DataCommonProperties();
-		p.size = Long.valueOf(subData.getSize());
+		p.size = BigInteger.valueOf(subData.getSize());
 		return p;
 	}
 }

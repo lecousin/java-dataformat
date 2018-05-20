@@ -1,5 +1,7 @@
 package net.lecousin.dataformat.core;
 
+import java.math.BigInteger;
+
 import net.lecousin.framework.geometry.HorizontalAlignment;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
@@ -12,7 +14,7 @@ public class DataCommonProperties {
 	@LocalizedName(namespace="b",key="Size")
 	@Render(RendererSize.class)
 	@TextAlign(HorizontalAlignment.RIGHT)
-	public Long size;
+	public BigInteger size;
 	
 	public static class Format extends DataCommonProperties {
 		@LocalizedName(namespace="dataformat",key="File Type")

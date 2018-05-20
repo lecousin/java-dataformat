@@ -13,13 +13,15 @@ public class SecurityDataFormatPlugin implements DataFormatPlugin {
 	@Override
 	public DataFormat[] getFormats() {
 		return new DataFormat[] {
-			PEMDataFormat.instance
+			Base64EncodedCertificateDataFormat.instance,
+			X509CertificateDataFormat.instance
 		};
 	}
 	
 	@Override
 	public DataFormatDetector[] getDetectors() {
 		return new DataFormatDetector[] {
+			new X509CertificateDetector()
 		};
 	}
 	

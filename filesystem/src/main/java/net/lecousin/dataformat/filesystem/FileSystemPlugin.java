@@ -11,7 +11,8 @@ public class FileSystemPlugin implements DataFormatPlugin {
 	@Override
 	public DataFormat[] getFormats() {
 		return new DataFormat[] {
-			MBRDataFormat.instance
+			MBRDataFormat.instance,
+			PhysicalDrivesDataFormat.instance
 		};
 	}
 

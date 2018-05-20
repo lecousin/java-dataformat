@@ -1,6 +1,7 @@
 package net.lecousin.dataformat.filesystem;
 
 import java.io.IOException;
+import java.math.BigInteger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -150,7 +151,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
 		// TODO Auto-generated method stub
 		DataCommonProperties p = new DataCommonProperties();
-		p.size = Long.valueOf(((DiskPartition)subData.getProperty("Partition")).size);
+		p.size = BigInteger.valueOf(((DiskPartition)subData.getProperty("Partition")).size);
 		return p;
 	}
 }

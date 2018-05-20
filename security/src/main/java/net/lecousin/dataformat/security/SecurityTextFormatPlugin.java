@@ -12,7 +12,7 @@ public class SecurityTextFormatPlugin implements TextSpecializationDetectorWithF
 	@Override
 	public DataFormat[] getDetectedFormats() {
 		return new DataFormat[] {
-			PEMDataFormat.instance
+			Base64EncodedCertificateDataFormat.instance
 		};
 	}
 	
@@ -40,7 +40,7 @@ public class SecurityTextFormatPlugin implements TextSpecializationDetectorWithF
 			) {
 				// looks like a PEM certificate
 				// TODO should we check that lines before -----END are 64 characters ?
-				return PEMDataFormat.instance;
+				return Base64EncodedCertificateDataFormat.instance;
 			}
 		}
 		return null;

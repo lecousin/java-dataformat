@@ -1,48 +1,51 @@
-package net.lecousin.dataformat.filesystem;
+package net.lecousin.dataformat.core;
 
-import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.io.buffering.ByteArrayIO;
 import net.lecousin.framework.locale.ILocalizableString;
-import net.lecousin.framework.locale.LocalizableString;
 
-public class PhysicalDrivesData extends Data {
+public class MemoryData extends Data {
 
-	public PhysicalDrivesData(Data parent) {
+	public MemoryData(Data parent, byte[] data, ILocalizableString name) {
 		this.parent = parent;
-		setFormat(PhysicalDrivesDataFormat.instance);
+		this.data = data;
+		this.name = name;
 	}
 	
-	private Data parent;
+	protected Data parent;
+	protected byte[] data;
+	protected ILocalizableString name;
 	
 	@Override
 	public ILocalizableString getName() {
-		return new LocalizableString("dataformat.filesystem", "Physical drives");
+		return name;
 	}
-
+	
 	@Override
 	public ILocalizableString getDescription() {
-		return getName();
+		return name;
 	}
-
+	
 	@Override
 	public long getSize() {
-		return 0;
+		return data.length;
 	}
-
+	
 	@Override
 	public boolean hasContent() {
-		return false;
+		return true;
 	}
-
+	
 	@Override
 	public Data getContainer() {
 		return parent;
 	}
-
+	
+	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
-		return null;
+	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
+		return new AsyncWork<>(new ByteArrayIO(data, "MemoryData"), null);
 	}
 
 	@Override
@@ -54,7 +57,5 @@ public class PhysicalDrivesData extends Data {
 	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
 		return null;
 	}
-
-	
 	
 }
