@@ -5,23 +5,25 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Readable.Seekable;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 
 public class DirectoryData extends Data implements IDirectoryData {
 
-	public DirectoryData(Data parent, ContainerDataFormat containerFormat, String name) {
+	public DirectoryData(Data parent, ContainerDataFormat containerFormat, ILocalizableString name) {
 		this.parent = parent;
 		this.name = name;
 		setFormat(new DirectoryDataFormat(containerFormat));
 	}
 
 	protected Data parent;
-	protected String name;
+	protected ILocalizableString name;
 	
 	@Override
-	public String getName() { return name; }
+	public ILocalizableString getName() { return name; }
 
 	@Override
-	public String getDescription() { return parent.getDescription() + '/' + name; }
+	public ILocalizableString getDescription() { return new LocalizableStringBuffer(parent.getDescription(), "/", name); }
 
 	@Override
 	public long getSize() { return 0; }

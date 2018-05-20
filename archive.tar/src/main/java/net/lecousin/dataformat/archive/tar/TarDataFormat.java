@@ -146,10 +146,10 @@ public class TarDataFormat extends ArchiveDataFormat {
 	private void listSubData(Data tarData, Data container, CollectionListener<Data> listener, TarFile tar, WorkProgress progress) {
 		String path;
 		if (container instanceof DirectoryData) {
-			path = container.getName() + '/';
+			path = container.getName().appLocalizationSync() + '/';
 			Data parent = container.getContainer();
 			while (parent instanceof DirectoryData) {
-				path = parent.getName() + '/' + path;
+				path = parent.getName().appLocalizationSync() + '/' + path;
 				parent = parent.getContainer();
 			}
 		} else
@@ -164,11 +164,11 @@ public class TarDataFormat extends ArchiveDataFormat {
 				if (path.length() == 0) {
 					if (dir) {
 						if (!dirs.contains(name)) {
-							content.add(new DirectoryData(container, this, name));
+							content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 							dirs.add(name);
 						}
 					} else {
-						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), null));
+						content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), new FixedLocalizedString(f.getName()), null));
 					}
 				}
 				continue;
@@ -178,11 +178,11 @@ public class TarDataFormat extends ArchiveDataFormat {
 			if (p.equals(path)) {
 				if (dir) {
 					if (!dirs.contains(name)) {
-						content.add(new DirectoryData(container, this, name));
+						content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 						dirs.add(name);
 					}
 				} else {
-					content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), f.getName(), p.substring(0, p.length() - 1)));
+					content.add(new SubData(tarData, f.getPosition(), f.getDataSize(), new FixedLocalizedString(f.getName()), p.substring(0, p.length() - 1)));
 				}
 				continue;
 			}
@@ -190,7 +190,7 @@ public class TarDataFormat extends ArchiveDataFormat {
 				i = p.indexOf('/');
 				name = p.substring(0, i);
 				if (!dirs.contains(name)) {
-					content.add(new DirectoryData(container, this, name));
+					content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 					dirs.add(name);
 				}
 				continue;
@@ -201,7 +201,7 @@ public class TarDataFormat extends ArchiveDataFormat {
 				if (i > 0) {
 					name = p.substring(0, i);
 					if (!dirs.contains(name)) {
-						content.add(new DirectoryData(container, this, name));
+						content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 						dirs.add(name);
 					}
 				}

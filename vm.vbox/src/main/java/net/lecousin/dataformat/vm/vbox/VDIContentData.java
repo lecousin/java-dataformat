@@ -3,6 +3,8 @@ package net.lecousin.dataformat.vm.vbox;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 
 public class VDIContentData extends Data {
@@ -16,10 +18,10 @@ public class VDIContentData extends Data {
 	private long size;
 	
 	@Override
-	public String getName() { return "Disk Image"; }
+	public ILocalizableString getName() { return new LocalizableString("dataformat.vm.vbox", "Disk Image"); }
 
 	@Override
-	public String getDescription() { return "Disk Image"; }
+	public ILocalizableString getDescription() { return new LocalizableString("dataformat.vm.vbox", "Disk Image"); }
 
 	@Override
 	public long getSize() { return size; }

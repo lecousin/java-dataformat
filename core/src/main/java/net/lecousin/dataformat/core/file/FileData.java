@@ -10,6 +10,7 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.memory.SimpleCache;
 import net.lecousin.framework.util.Provider.FromValue;
 
@@ -61,12 +62,12 @@ public class FileData extends Data {
 	
 	public File getFile() { return file; }
 	@Override
-	public String getName() {
-		return file.getName();
+	public FixedLocalizedString getName() {
+		return new FixedLocalizedString(file.getName());
 	}
 	@Override
-	public String getDescription() {
-		return file.getAbsolutePath();
+	public FixedLocalizedString getDescription() {
+		return new FixedLocalizedString(file.getAbsolutePath());
 	}
 	@Override
 	public long getSize() {

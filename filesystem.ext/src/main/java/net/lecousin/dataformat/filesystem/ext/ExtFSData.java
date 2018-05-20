@@ -4,6 +4,9 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 
 public class ExtFSData extends Data {
 
@@ -21,14 +24,11 @@ public class ExtFSData extends Data {
 	protected ExtFSEntry entry;
 	
 	@Override
-	public String getName() { return entry.getName(); }
+	public FixedLocalizedString getName() { return new FixedLocalizedString(entry.getName()); }
 
 	@Override
-	public String getDescription() {
-		StringBuilder s = new StringBuilder(container.getDescription());
-		s.append('/');
-		s.append(entry.getName());
-		return s.toString();
+	public ILocalizableString getDescription() {
+		return new LocalizableStringBuffer(container.getDescription(), "/" + entry.getName());
 	}
 
 	@Override

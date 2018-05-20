@@ -17,13 +17,16 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 import net.lecousin.framework.util.Pair;
 
 public class ResourcesProcessor {
 
 	public static void process(Map<Object,Object> map, ArrayList<Data> list, byte[] b) throws Exception {
-		processGroupIcon(map, 0x0E, 0x03, "Icon Group", b, list);
-		processGroupIcon(map, 0x0C, 0x01, "Cursor Group", b, list);
+		processGroupIcon(map, 0x0E, 0x03, new LocalizableString("dataformat.executable.windows", "Icon Group"), b, list);
+		processGroupIcon(map, 0x0C, 0x01, new LocalizableString("dataformat.executable.windows", "Cursor Group"), b, list);
 		processType(new Integer(6), map, new DataTypeSetter(ResourceDataType_StringTable.instance));
 		processType(new Integer(9), map, new DataTypeSetter(ResourceDataType_Accelerators.instance));
 		processType(new Integer(4), map, new DataTypeSetter(ResourceDataType_Menu.instance));
@@ -79,7 +82,7 @@ public class ResourcesProcessor {
 	}
 	
 	@SuppressWarnings("unchecked")
-	private static void processGroupIcon(Map<Object,Object> map, int group_code, int ico_code, String group_name, byte[] file_header, ArrayList<Data> datas) 
+	private static void processGroupIcon(Map<Object,Object> map, int group_code, int ico_code, ILocalizableString group_name, byte[] file_header, ArrayList<Data> datas) 
 	throws Exception {
 		Object group_icon = map.remove(new Integer(group_code));
 		Object icons = map.get(new Integer(ico_code));
@@ -127,7 +130,7 @@ public class ResourcesProcessor {
 										pos_header += 16;
 										pos_data += ico_data.getSize();
 									}
-									FragmentedSubData sd = new FragmentedSubData(gi_data.getParent(), group_name+" "+name.toString());
+									FragmentedSubData sd = new FragmentedSubData(gi_data.getParent(), new LocalizableStringBuffer(group_name, " "+name.toString()));
 									sd.addHeader(buffer);
 									for (Pair<byte[],SubData> ico : found_icons) {
 										SubData ico_data = ico.getValue2();

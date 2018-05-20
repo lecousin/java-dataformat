@@ -17,6 +17,7 @@ import net.lecousin.framework.concurrent.synch.JoinPoint;
 import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
+import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.util.Pair;
@@ -70,7 +71,7 @@ public class ContainerExtraction {
 	
 	private static class Dir {
 		
-		private String name;
+		private ILocalizableString name;
 		private LinkedArrayList<Data> files = new LinkedArrayList<>(10);
 		private LinkedArrayList<Dir> dirs = new LinkedArrayList<>(10);
 		
@@ -185,21 +186,23 @@ public class ContainerExtraction {
 			return new SynchronizationPoint<>(error);
 		}
 		
-		CreateContainerDataAction.Param param = createContainer.createParameter(target);
-		param.setName(dir.name);
-		AsyncWork<Data, Exception> result = ((CreateContainerDataAction)createContainer).execute(target, param, Task.PRIORITY_NORMAL, progress, 4096L);
 		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-		result.listenAsync(new Task.Cpu.FromRunnable("Extract files", Task.PRIORITY_NORMAL, () -> {
-			Data d = result.getResult();
-			DataFormat f = d.getDetectedFormat();
-			if (!(f instanceof ContainerDataFormat)) {
-				Exception error = new Exception("Created directory has no container format set: " + d.getDescription());
-				sp.error(error);
-				progress.error(error);
-				return;
-			}
-			extract(dir, d, progress).listenInline(sp);
-		}), sp);
+		CreateContainerDataAction.Param param = createContainer.createParameter(target);
+		dir.name.appLocalization().listenInline((localizedName) -> {
+			param.setName(localizedName);
+			AsyncWork<Data, Exception> result = ((CreateContainerDataAction)createContainer).execute(target, param, Task.PRIORITY_NORMAL, progress, 4096L);
+			result.listenAsync(new Task.Cpu.FromRunnable("Extract files", Task.PRIORITY_NORMAL, () -> {
+				Data d = result.getResult();
+				DataFormat f = d.getDetectedFormat();
+				if (!(f instanceof ContainerDataFormat)) {
+					Exception error = new Exception("Created directory has no container format set: " + d.getDescription());
+					sp.error(error);
+					progress.error(error);
+					return;
+				}
+				extract(dir, d, progress).listenInline(sp);
+			}), sp);
+		});
 		return sp;
 	}
 	
@@ -215,28 +218,30 @@ public class ContainerExtraction {
 			return new SynchronizationPoint<>(error);
 		}
 		
-		CreateDataAction.Param param = createData.createParameter(targetDir);
-		param.setName(src.getName());
-		AsyncWork<Pair<Data, IO.Writable>, Exception> create = ((CreateDataAction)createData).execute(targetDir, param, Task.PRIORITY_NORMAL, progress, 1024);
 		JoinPoint<Exception> jp = new JoinPoint<>();
-		jp.addToJoin(create);
+		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
 		AsyncWork<? extends IO.Readable, Exception> open = src.openReadOnly(Task.PRIORITY_NORMAL);
 		jp.addToJoin(open);
-		jp.listenInline(() -> {
-			if (open.isSuccessful())
-				open.getResult().closeAsync();
-			if (create.isSuccessful())
-				create.getResult().getValue2().closeAsync();
+		src.getName().appLocalization().listenInline((localizedName) -> {
+			CreateDataAction.Param param = createData.createParameter(targetDir);
+			param.setName(localizedName);
+			AsyncWork<Pair<Data, IO.Writable>, Exception> create = ((CreateDataAction)createData).execute(targetDir, param, Task.PRIORITY_NORMAL, progress, 1024);
+			jp.addToJoin(create);
+			jp.listenInline(() -> {
+				if (open.isSuccessful())
+					open.getResult().closeAsync();
+				if (create.isSuccessful())
+					create.getResult().getValue2().closeAsync();
+			});
+			jp.addToJoin(1);
+			jp.start();
+			jp.listenAsync(new Task.Cpu.FromRunnable("Extract file " + src.getName(), Task.PRIORITY_NORMAL, () -> {
+				IO.Writable out = create.getResult().getValue2();
+				IO.Readable in = open.getResult();
+				jp.addToJoin(IOUtil.copy(in, out, src.getSize(), false, progress, src.getSize()));
+				jp.joined();
+			}), sp);
 		});
-		jp.addToJoin(1);
-		jp.start();
-		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
-		jp.listenAsync(new Task.Cpu.FromRunnable("Extract file " + src.getName(), Task.PRIORITY_NORMAL, () -> {
-			IO.Writable out = create.getResult().getValue2();
-			IO.Readable in = open.getResult();
-			jp.addToJoin(IOUtil.copy(in, out, src.getSize(), false, progress, src.getSize()));
-			jp.joined();
-		}), sp);
 		return sp;
 	}
 	

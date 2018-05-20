@@ -222,7 +222,7 @@ public class ELFDataFormat implements ContainerDataFormat {
 						i++;
 					}
 				}
-				dataList.add(new SubData(data, offset, size, name.toString()));
+				dataList.add(new SubData(data, offset, size, new FixedLocalizedString(name.toString())));
 				readSection(data, io, info, sectionEntryBuffer, sectionIndex+1, names, listener, progress, work - step, dataList);
 				return null;
 			}

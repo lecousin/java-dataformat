@@ -6,6 +6,8 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.EmptyReadable;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 
 public class CabFileData extends Data {
@@ -19,12 +21,12 @@ public class CabFileData extends Data {
 	private CabFile.File file;
 	
 	@Override
-	public String getName() {
-		return file.getName();
+	public ILocalizableString getName() {
+		return new FixedLocalizedString(file.getName());
 	}
 	@Override
-	public String getDescription() {
-		return file.getName();
+	public ILocalizableString getDescription() {
+		return new FixedLocalizedString(file.getName());
 	}
 	@Override
 	public long getSize() {

@@ -85,7 +85,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 					Partitions.Partition partition = new Partitions.Partition();
 					partition.partitionInfo = p;
 					if (p.start > 0) {
-						partition.data = new SubData(data, p.start, p.size, "Partition " + index++);
+						partition.data = new SubData(data, p.start, p.size, new FixedLocalizedString("Partition " + index++));
 						partition.data.setProperty("Partition", p);
 					}
 					partitions.list.add(partition);

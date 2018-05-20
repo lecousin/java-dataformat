@@ -9,6 +9,7 @@ import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -63,7 +64,7 @@ public class MZDataFormat implements DataWrapperDataFormat {
 			long size = container.getSize();
 			if (off == size)
 				return new AsyncWork<>(null, null);
-			sd = new SubData(container, off, size-off, "Data");
+			sd = new SubData(container, off, size-off, new LocalizableString("dataformat", "Content"));
 			container.setProperty("MZSubData", sd);
 		}
 		progress.progress(work);

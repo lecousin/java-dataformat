@@ -10,6 +10,9 @@ import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 import net.lecousin.framework.memory.CachedObject;
 
 public class ZipFileData extends Data {
@@ -23,16 +26,16 @@ public class ZipFileData extends Data {
 	ZippedFile file;
 	
 	@Override
-	public String getName() {
+	public FixedLocalizedString getName() {
 		String n = file.getFilename();
 		int i = n.lastIndexOf('/');
-		if (i < 0) return n;
-		return n.substring(i + 1);
+		if (i < 0) return new FixedLocalizedString(n);
+		return new FixedLocalizedString(n.substring(i + 1));
 	}
 	
 	@Override
-	public String getDescription() {
-		return zip.getDescription() + '/' + file.getFilename();
+	public ILocalizableString getDescription() {
+		return new LocalizableStringBuffer(zip.getDescription(), "/", file.getFilename());
 	}
 	
 	@Override

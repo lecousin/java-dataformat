@@ -1,1 +1,4 @@
+cursor group=groupe de curseurs
+hidden data=donnée cachée
+icon group=groupe d'icônes
 target machine=machine cible

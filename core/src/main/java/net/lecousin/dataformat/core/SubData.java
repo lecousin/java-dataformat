@@ -3,13 +3,14 @@ package net.lecousin.dataformat.core;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.SubIO;
+import net.lecousin.framework.locale.ILocalizableString;
 
 public class SubData extends Data {
 
-	public SubData(Data parent, long offset, long size, String name) {
+	public SubData(Data parent, long offset, long size, ILocalizableString name) {
 		this(parent, offset, size, name, null);
 	}
-	public SubData(Data parent, long offset, long size, String name, String path) {
+	public SubData(Data parent, long offset, long size, ILocalizableString name, String path) {
 		this.parent = parent;
 		this.offset = offset;
 		this.size = size;
@@ -20,14 +21,14 @@ public class SubData extends Data {
 	protected Data parent;
 	protected long offset;
 	protected long size;
-	protected String name;
+	protected ILocalizableString name;
 	protected String path;
 	
 	public Data getParent() { return parent; }
 	public long getOffset() { return offset; }
 
 	@Override
-	public String getName() {
+	public ILocalizableString getName() {
 		return name;
 	}
 	
@@ -36,7 +37,7 @@ public class SubData extends Data {
 	}
 
 	@Override
-	public String getDescription() {
+	public ILocalizableString getDescription() {
 		return name;
 	}
 
@@ -70,7 +71,9 @@ public class SubData extends Data {
 					return;
 				}
 				IO io = open.getResult();
-				result.unblockSuccess(new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, offset, size, name, true));
+				name.appLocalization().listenInline((localizedName) -> {
+					result.unblockSuccess(new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, offset, size, localizedName, true));
+				});
 			}
 		});
 		return result;
@@ -97,7 +100,9 @@ public class SubData extends Data {
 					return;
 				}
 				T io = open.getResult();
-				result.unblockSuccess((T)new SubIO.ReadWrite(io, offset, size, name, true));
+				name.appLocalization().listenInline((localizedName) -> {
+					result.unblockSuccess((T)new SubIO.ReadWrite(io, offset, size, localizedName, true));
+				});
 			}
 		});
 		return result;

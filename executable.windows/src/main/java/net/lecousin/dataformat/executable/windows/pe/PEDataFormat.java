@@ -46,7 +46,7 @@ public class PEDataFormat extends MZDataFormat {
 		SubData coff = (SubData)container.getProperty("COFF");
 		if (coff == null) {
 			long peOffset = ((Long)container.getProperty("PEOffset")).longValue();
-			coff = new SubData(container, peOffset+4, container.getSize()-peOffset-4, "COFF");
+			coff = new SubData(container, peOffset+4, container.getSize()-peOffset-4, new FixedLocalizedString("COFF"));
 			coff.setFormat(COFFDataFormat.instance);
 			container.setProperty("COFF", coff);
 			coff.setProperty("COFFOffset", new Long(peOffset+4));

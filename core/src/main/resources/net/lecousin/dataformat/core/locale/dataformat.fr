@@ -1,3 +1,4 @@
+content=contenu
 directory=répertoire
 empty=vide
 file type=type de fichier

@@ -24,6 +24,8 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
 import net.lecousin.framework.progress.WorkProgress;
@@ -172,11 +174,11 @@ public class COFFDataFormat implements ContainerDataFormat {
 									logger.error("Error reading RSRC", e);
 							}
 						} else
-							datas.add(new SubData(data, s.real_addr+s.virtual_size, s.real_size, s.name));
+							datas.add(new SubData(data, s.real_addr+s.virtual_size, s.real_size, new FixedLocalizedString(s.name)));
 					}
 					int i = 1;
 					for (RangeLong r : unused_data) {
-						SubData hidden = new SubData(data, r.min, r.max-r.min+1, "Hidden data "+(i++));
+						SubData hidden = new SubData(data, r.min, r.max-r.min+1, new LocalizableStringBuffer(new LocalizableString("dataformat.executable.windows", "Hidden data"), " "+(i++)));
 						datas.add(hidden);
 					}
 					listener.elementsReady(datas);
@@ -230,7 +232,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 					if (logger.isErrorEnabled())
 						logger.error("Invalid virtual address "+StringUtil.encodeHexaPadding(p.getValue1().longValue())+" in "+data.getDescription());
 				} else if (addr != -2)
-					map.put(type, new SubData(data, addr, p.getValue2().longValue(), "type "+type.toString()));
+					map.put(type, new SubData(data, addr, p.getValue2().longValue(), new FixedLocalizedString("type "+type.toString())));
 				continue;
 			}
 			Map<Object,Object> map2 = (Map<Object,Object>)v1;
@@ -243,7 +245,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 						if (logger.isErrorEnabled())
 							logger.error("Invalid virtual address "+StringUtil.encodeHexaPadding(p.getValue1().longValue())+" in "+data.getDescription());
 					} else if (addr != -2)
-						map2.put(name, new SubData(data, addr, p.getValue2().longValue(), "Resource type "+type.toString()+" name "+name.toString()));
+						map2.put(name, new SubData(data, addr, p.getValue2().longValue(), new FixedLocalizedString("Resource type "+type.toString()+" name "+name.toString())));
 					continue;
 				}
 				Map<Object,Object> map3 = (Map<Object,Object>)v2;
@@ -256,7 +258,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 							if (logger.isErrorEnabled())
 								logger.error("Invalid virtual address "+StringUtil.encodeHexaPadding(p.getValue1().longValue())+" in "+data.getDescription());
 						} else if (addr != -2)
-							map3.put(lang, new SubData(data, addr, p.getValue2().longValue(), "Resource type "+type.toString()+" name "+name.toString()+" language "+lang.toString()));
+							map3.put(lang, new SubData(data, addr, p.getValue2().longValue(), new FixedLocalizedString("Resource type "+type.toString()+" name "+name.toString()+" language "+lang.toString())));
 						continue;
 					}
 					System.out.println("Unexpected PE resource level");

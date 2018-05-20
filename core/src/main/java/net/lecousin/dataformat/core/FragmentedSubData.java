@@ -5,18 +5,19 @@ import net.lecousin.framework.io.FragmentedSubIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.LinkedIO;
 import net.lecousin.framework.io.buffering.ByteArrayIO;
+import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
 
 public class FragmentedSubData extends Data {
 
-	public FragmentedSubData(Data parent, String name) {
+	public FragmentedSubData(Data parent, ILocalizableString name) {
 		this.parent = parent;
 		this.name = name;
 	}
 	
 	protected Data parent;
-	protected String name;
+	protected ILocalizableString name;
 	protected byte[] header = null;
 	protected FragmentedRangeLong fragments = new FragmentedRangeLong();
 	
@@ -32,12 +33,12 @@ public class FragmentedSubData extends Data {
 	}
 
 	@Override
-	public String getName() {
+	public ILocalizableString getName() {
 		return name;
 	}
 
 	@Override
-	public String getDescription() {
+	public ILocalizableString getDescription() {
 		return name;
 	}
 
@@ -70,11 +71,13 @@ public class FragmentedSubData extends Data {
 						result.unblockError(open.getError());
 					return;
 				}
-				IO.Readable io = open.getResult();
-				io = new FragmentedSubIO.Readable((IO.Readable.Seekable)io, fragments, true, name);
-				if (header != null)
-					io = new LinkedIO.Readable.Seekable.DeterminedSize(name, new ByteArrayIO(header, "header"), (FragmentedSubIO.Readable)io);
-				result.unblockSuccess(io);
+				name.appLocalization().listenInline((localizedName) -> {
+					IO.Readable io = open.getResult();
+					io = new FragmentedSubIO.Readable((IO.Readable.Seekable)io, fragments, true, localizedName);
+					if (header != null)
+						io = new LinkedIO.Readable.Seekable.DeterminedSize(localizedName, new ByteArrayIO(header, "header"), (FragmentedSubIO.Readable)io);
+					result.unblockSuccess(io);
+				});
 			}
 		});
 		return result;
@@ -100,11 +103,13 @@ public class FragmentedSubData extends Data {
 						result.unblockError(open.getError());
 					return;
 				}
-				T io = open.getResult();
-				io = (T)new FragmentedSubIO.ReadWrite(io, fragments, true, name);
-				if (header != null)
-					io = (T)new LinkedIO.ReadWrite(name, new ByteArrayIO(header, "header"), (FragmentedSubIO.ReadWrite)io);
-				result.unblockSuccess(io);
+				name.appLocalization().listenInline((localizedName) -> {
+					T io = open.getResult();
+					io = (T)new FragmentedSubIO.ReadWrite(io, fragments, true, localizedName);
+					if (header != null)
+						io = (T)new LinkedIO.ReadWrite(localizedName, new ByteArrayIO(header, "header"), (FragmentedSubIO.ReadWrite)io);
+					result.unblockSuccess(io);
+				});
 			}
 		});
 		return result;

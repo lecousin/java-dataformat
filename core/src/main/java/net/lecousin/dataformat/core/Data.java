@@ -20,6 +20,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.SubIO;
 import net.lecousin.framework.io.buffering.BufferedIO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
+import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.mutable.MutableInteger;
@@ -33,8 +34,8 @@ public abstract class Data {
 		return LCCore.getApplication().getLoggerFactory().getLogger(Data.class);
 	}
 	
-	public abstract String getName();
-	public abstract String getDescription();
+	public abstract ILocalizableString getName();
+	public abstract ILocalizableString getDescription();
 	/** returns -1 if size is unknown. */
 	public abstract long getSize();
 	

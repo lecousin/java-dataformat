@@ -2,6 +2,7 @@ allocated blocks number=allocated blocks number
 block size=block size
 blocks number=blocks number
 comment=comment
+disk image=disk image
 disk size=disk size
 version=version
 Virtual Disk Image Type=allocation type

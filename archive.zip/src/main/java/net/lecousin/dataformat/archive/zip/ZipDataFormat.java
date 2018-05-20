@@ -148,10 +148,10 @@ public class ZipDataFormat extends ArchiveDataFormat {
 	private void listSubData(Data zipData, Data container, CollectionListener<Data> listener, ZipArchive zip, WorkProgress progress) {
 		String path;
 		if (container instanceof DirectoryData) {
-			path = container.getName() + '/';
+			path = container.getName().appLocalizationSync() + '/';
 			Data parent = container.getContainer();
 			while (parent instanceof DirectoryData) {
-				path = parent.getName() + '/' + path;
+				path = parent.getName().appLocalizationSync() + '/' + path;
 				parent = parent.getContainer();
 			}
 		} else
@@ -171,7 +171,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 				if (path.length() == 0) {
 					if (dir) {
 						if (!dirs.contains(name)) {
-							content.add(new DirectoryData(container, this, name));
+							content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 							dirs.add(name);
 						}
 					} else {
@@ -185,7 +185,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 			if (p.equals(path)) {
 				if (dir) {
 					if (!dirs.contains(name)) {
-						content.add(new DirectoryData(container, this, name));
+						content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 						dirs.add(name);
 					}
 				} else {
@@ -197,7 +197,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 				i = p.indexOf('/');
 				name = p.substring(0, i);
 				if (!dirs.contains(name)) {
-					content.add(new DirectoryData(container, this, name));
+					content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 					dirs.add(name);
 				}
 				continue;
@@ -208,7 +208,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 				if (i > 0) {
 					name = p.substring(0, i);
 					if (!dirs.contains(name)) {
-						content.add(new DirectoryData(container, this, name));
+						content.add(new DirectoryData(container, this, new FixedLocalizedString(name)));
 						dirs.add(name);
 					}
 				}

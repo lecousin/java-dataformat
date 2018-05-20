@@ -21,6 +21,8 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
+import net.lecousin.framework.locale.LocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
@@ -183,7 +185,7 @@ public abstract class ICOCURFormat extends ImageDataFormat.Multiple {
 				int index = 1;
 				ArrayList<Data> subdata = new ArrayList<>(dir.images.size());
 				for (Image i : dir.images) {
-					SubData sb = new SubData(container, i.dataOffset, i.dataSize, "Icon " + (index++));
+					SubData sb = new SubData(container, i.dataOffset, i.dataSize, new LocalizableStringBuffer(new LocalizableString("dataformat.image.ico", "Icon"), " " + (index++)));
 					subdata.add(sb);
 					sb.setProperty(IMAGE_PROPERTY, i);
 					sb.setProperty(DIBReaderOp.DIBImageProvider.DATA_PROPERTY, new ICOImageProvider(i.height));

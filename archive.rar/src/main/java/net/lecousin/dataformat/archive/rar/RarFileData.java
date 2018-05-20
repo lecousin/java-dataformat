@@ -4,6 +4,9 @@ import net.lecousin.dataformat.archive.rar.RarArchive.RARFile;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableStringBuffer;
 
 public class RarFileData extends Data {
 
@@ -16,13 +19,13 @@ public class RarFileData extends Data {
 	RARFile file;
 
 	@Override
-	public String getName() {
-		return file.getName();
+	public ILocalizableString getName() {
+		return new FixedLocalizedString(file.getName());
 	}
 
 	@Override
-	public String getDescription() {
-		return parent.getDescription()+'/'+file.getName();
+	public ILocalizableString getDescription() {
+		return new LocalizableStringBuffer(parent.getDescription(), "/", file.getName());
 	}
 
 	@Override

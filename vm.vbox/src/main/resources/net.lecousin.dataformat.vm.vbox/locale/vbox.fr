@@ -2,6 +2,7 @@ allocated blocks number=nombre de blocs alloués
 block size=taille de bloc
 blocks number=nombre de blocs
 comment=comment
+disk image=image disque
 disk size=taille du disque
 version=version
 Virtual Disk Image Type=type d'allocation

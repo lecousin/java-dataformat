@@ -38,7 +38,7 @@ public class RenameFileAction extends RenameDataAction<RenameFileAction.RenamePa
 	@Override
 	public RenameParameter createParameter(Data data) {
 		RenameParameter p = new RenameParameter();
-		p.name = data.getName();
+		p.name = data.getName().appLocalizationSync();
 		return p;
 	}
 	

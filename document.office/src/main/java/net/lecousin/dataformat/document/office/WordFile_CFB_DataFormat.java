@@ -77,7 +77,7 @@ public class WordFile_CFB_DataFormat extends CFBDataFormat {
 			public void elementsReady(Collection<? extends Data> elements) {
 				for (Data file : elements) {
 					if (sp.isCancelled()) return;
-					String name = file.getName();
+					String name = file.getName().appLocalizationSync();
 					if ("\u0005SummaryInformation".equals(name)) {
 						AsyncWork<OLEPropertySets,Exception> t = OLEPropertySetStream.readOLEPropertySets(file, priority);
 						synchronized (works) { works.add(t); }

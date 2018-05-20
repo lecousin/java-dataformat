@@ -7,6 +7,8 @@ import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.io.FragmentedSubIO;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.math.RangeLong;
 import net.lecousin.framework.memory.CachedObject;
 
@@ -21,12 +23,12 @@ public class CFBSubFileData extends Data {
 	private CFBSubFile file;
 	
 	@Override
-	public String getName() {
-		return file.name;
+	public ILocalizableString getName() {
+		return new FixedLocalizedString(file.name);
 	}
 	@Override
-	public String getDescription() {
-		return file.name;
+	public ILocalizableString getDescription() {
+		return new FixedLocalizedString(file.name);
 	}
 	@Override
 	public long getSize() {

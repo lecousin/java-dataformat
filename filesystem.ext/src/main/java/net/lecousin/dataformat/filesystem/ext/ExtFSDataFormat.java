@@ -136,7 +136,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 		Data fsData = container;
 		LinkedList<String> path = new LinkedList<>();
 		while (fsData.getDetectedFormat() != ExtFSDataFormat.instance) {
-			path.addFirst(fsData.getName());
+			path.addFirst(fsData.getName().appLocalizationSync());
 			fsData = fsData.getContainer();
 		}
 		

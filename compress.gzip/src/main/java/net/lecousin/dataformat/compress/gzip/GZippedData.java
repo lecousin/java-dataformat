@@ -4,6 +4,7 @@ import net.lecousin.compression.gzip.GZipReadable;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO;
+import net.lecousin.framework.locale.FixedLocalizedString;
 
 public class GZippedData extends Data {
 
@@ -16,10 +17,10 @@ public class GZippedData extends Data {
 	protected GZipHeader header;
 	
 	@Override
-	public String getName() { return header.filename != null ? header.filename : ""; }
+	public FixedLocalizedString getName() { return new FixedLocalizedString(header.filename != null ? header.filename : ""); }
 
 	@Override
-	public String getDescription() { return "GZipped"; }
+	public FixedLocalizedString getDescription() { return new FixedLocalizedString("GZipped"); }
 
 	@Override
 	public long getSize() { return -1; }

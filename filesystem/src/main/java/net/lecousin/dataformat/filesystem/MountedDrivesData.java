@@ -4,6 +4,8 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Readable.Seekable;
+import net.lecousin.framework.locale.FixedLocalizedString;
+import net.lecousin.framework.locale.ILocalizableString;
 
 public class MountedDrivesData extends Data {
 
@@ -15,13 +17,13 @@ public class MountedDrivesData extends Data {
 	protected Data parent;
 	
 	@Override
-	public String getName() {
-		return "Mounted drives"; // TODO
+	public ILocalizableString getName() {
+		return new FixedLocalizedString("Mounted drives"); // TODO
 	}
 
 	@Override
-	public String getDescription() {
-		return "";
+	public ILocalizableString getDescription() {
+		return new FixedLocalizedString("");
 	}
 
 	@Override
