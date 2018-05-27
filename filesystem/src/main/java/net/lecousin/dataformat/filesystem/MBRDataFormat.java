@@ -118,9 +118,10 @@ public class MBRDataFormat implements ContainerDataFormat {
 					return;
 				}
 				List<Data> l = new ArrayList<>();
-				for (Partitions.Partition p : res.get().list)
-					if (p.data != null)
-						l.add(p.data);
+				if (res.get() != null)
+					for (Partitions.Partition p : res.get().list)
+						if (p.data != null)
+							l.add(p.data);
 				listener.elementsReady(l);
 				progress.done();
 				res.release(MBRDataFormat.this);

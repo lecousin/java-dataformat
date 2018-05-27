@@ -13,7 +13,7 @@ import net.lecousin.framework.concurrent.CancelException;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
 import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.LockPoint;
+import net.lecousin.framework.concurrent.synch.MutualExclusion;
 import net.lecousin.framework.event.Listener;
 import net.lecousin.framework.event.SingleEvent;
 import net.lecousin.framework.exception.NoException;
@@ -57,7 +57,7 @@ public abstract class Data {
 	private int ioUsage = 0;
 	private Task<Void,NoException> closeIO = null;
 	private AsyncWork<? extends IO, ? extends Exception> rwIO = null;
-	private LockPoint<NoException> ioMutex = new LockPoint<>();
+	private MutualExclusion<NoException> ioMutex = new MutualExclusion<>();
 	
 	public void forceCloseIOReadOnly() {
 		ioMutex.lock();
@@ -365,7 +365,7 @@ public abstract class Data {
 	private Exception formatError = null;
 	private ArrayList<Pair<DataFormatListener,Task<?,?>>> formatListeners = null;
 	private Detection detection = null;
-	private LockPoint<NoException> detectionMutex = new LockPoint<>();
+	private MutualExclusion<NoException> detectionMutex = new MutualExclusion<>();
 	
 	private class Detection {
 		private AsyncWork<? extends IO.Readable,Exception> open;
