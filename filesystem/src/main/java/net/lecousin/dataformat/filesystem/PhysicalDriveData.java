@@ -2,13 +2,17 @@ package net.lecousin.dataformat.filesystem;
 
 import java.io.IOException;
 import java.math.BigInteger;
+import java.nio.file.AccessDeniedException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.remotejvm.RemoteJVM;
+import net.lecousin.framework.system.hardware.Drive;
 import net.lecousin.framework.system.hardware.Drives;
 import net.lecousin.framework.system.hardware.PhysicalDrive;
 
@@ -55,12 +59,51 @@ public class PhysicalDriveData extends Data {
 
 	@Override
 	protected AsyncWork<IO.Readable, IOException> openIOReadOnly(byte priority) {
-		return new Task.Unmanaged<IO.Readable, IOException>("Opening physical drive for reading", priority) {
+		AsyncWork<IO.Readable, IOException> result = new AsyncWork<>();
+		new Task.Unmanaged<Void, NoException>("Opening physical drive for reading", priority) {
+			@SuppressWarnings({ "unchecked", "resource" })
 			@Override
-			public IO.Readable run() throws IOException {
-				return Drives.getInstance().openReadOnly(drive, priority);
+			public Void run() {
+				try {
+					result.unblockSuccess(Drives.getInstance().openReadOnly(drive, priority));
+				} catch (AccessDeniedException e) {
+					AsyncWork<RemoteJVM, Exception> start = RemoteJVM.getElevatedJVM();
+					start.listenInline(() -> {
+						if (start.hasError()) {
+							result.error(IO.error(start.getError()));
+							return;
+						}
+						RemoteJVM jvm = start.getResult();
+						AsyncWork<Object, Exception> open;
+						try {
+							open = jvm.callStatic(OpenDiskFromRemote.class.getMethod("openDisk", String.class), "PhysicalDrive0");
+						} catch (Exception err) {
+							result.error(IO.error(err));
+							return;
+						}
+						open.listenInline(() -> {
+							if (open.hasError()) {
+								result.error(IO.error(open.getError()));
+								return;
+							}
+							AsyncWork<IO.Readable.Seekable, Exception> remoteOpen = (AsyncWork<IO.Readable.Seekable, Exception>)open.getResult();
+							remoteOpen.listenInline(() -> {
+								if (remoteOpen.hasError()) {
+									result.error(IO.error(remoteOpen.getError()));
+									return;
+								}
+								IO.Readable.Seekable io = remoteOpen.getResult();
+								result.unblockSuccess(io);
+							});
+						});
+					});
+				} catch (IOException e) {
+					result.error(e);
+				}
+				return null;
 			}
-		}.start().getOutput();
+		}.start();
+		return result;
 	}
 
 	@Override
@@ -73,4 +116,33 @@ public class PhysicalDriveData extends Data {
 		return null;
 	}
 
+	public static class OpenDiskFromRemote {
+		
+		public static AsyncWork<IO.Readable.Seekable, Exception> openDisk(String diskId) {
+			AsyncWork<IO.Readable.Seekable, Exception> result = new AsyncWork<>();
+			Drives.getInstance().initialize().getSynch().listenAsync(new Task.Unmanaged<Void,NoException>("Opening physical drive for reading", Task.PRIORITY_NORMAL) {
+				@Override
+				public Void run() {
+					for (Drive drive : Drives.getInstance().getDrives()) {
+						if (!(drive instanceof PhysicalDrive)) continue;
+						PhysicalDrive d = (PhysicalDrive)drive;
+						if (!diskId.equals(d.getOSId())) continue;
+						try {
+							@SuppressWarnings("resource")
+							IO.Readable.Seekable io = Drives.getInstance().openReadOnly(d, Task.PRIORITY_NORMAL);
+							result.unblockSuccess(io);
+						} catch (IOException e) {
+							result.error(e);
+						}
+						return null;
+					}
+					result.error(new Exception("Drive " + diskId + " not found"));
+					return null;
+				}
+			}, result);
+			return result;
+		}
+		
+	}
+	
 }

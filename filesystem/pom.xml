@@ -24,6 +24,11 @@
   		<artifactId>ui.iconset.hardware</artifactId>
   		<version>0.1.0</version>
   	</dependency>
+  	<dependency>
+  		<groupId>net.lecousin.framework</groupId>
+  		<artifactId>remotejvm</artifactId>
+  		<version>0.1.0</version>
+  	</dependency>
   </dependencies>
   
 </project>
