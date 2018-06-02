@@ -45,7 +45,7 @@ public class ZipArchive implements Closeable {
 	public static <T extends IO.Readable.Seekable&IO.KnownSize> ZipArchive loadForExtraction(T in) {
 		return new ZipArchive(in);
 	}
-	public static <T extends IO.Readable.Seekable&IO.KnownSize> ZipArchive loadForExtraction(T in, IOProvider.Readable.Seekable.DeterminedSize ioProvider) {
+	public static <T extends IO.Readable.Seekable&IO.KnownSize> ZipArchive loadForExtraction(T in, IOProvider.Readable.Seekable.KnownSize ioProvider) {
 		return new ZipArchive(in, ioProvider);
 	}
 	/* TODO
