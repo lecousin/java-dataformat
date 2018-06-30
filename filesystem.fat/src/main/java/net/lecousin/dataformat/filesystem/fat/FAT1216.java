@@ -35,7 +35,7 @@ public abstract class FAT1216 extends FAT {
 	@Override
 	public void listRootEntries(AsyncCollection<FatEntry> listener) {
 		long start = (reservedSectors + nbFat * sectorsPerFat) * bytesPerSector;
-		listRootEntries(0, start, new FatEntryState(), new byte[512], listener);
+		listRootEntries(0, start, new FatEntryState(), new byte[sectorsPerCluster * bytesPerSector], listener);
 	}
 	
 	private void listRootEntries(int index, long offset, FatEntryState state, byte[] buffer, AsyncCollection<FatEntry> listener) {
@@ -45,12 +45,12 @@ public abstract class FAT1216 extends FAT {
 				listener.error(read.getError());
 				return;
 			}
-			if (read.getResult().intValue() != 512) {
+			if (read.getResult().intValue() != buffer.length) {
 				listener.error(new IOException("Unexpected end of FAT file system"));
 				return;
 			}
 			List<FatEntry> entries = new ArrayList<>(32);
-			for (int i = 0; i < 32; ++i) {
+			for (int i = 0; i < buffer.length / 32; ++i) {
 				if (index + i >= maxNbRootEntries) break;
 				if (!readDirectoryEntry(buffer, i * 32, state, entries)) {
 					if (!entries.isEmpty())
@@ -68,7 +68,7 @@ public abstract class FAT1216 extends FAT {
 			if (index + 32 >= maxNbRootEntries)
 				listener.done();
 			else
-				listRootEntries(index + 32, offset + 512, state, buffer, listener);
+				listRootEntries(index + buffer.length / 32, offset + buffer.length, state, buffer, listener);
 		}), true);
 	}
 

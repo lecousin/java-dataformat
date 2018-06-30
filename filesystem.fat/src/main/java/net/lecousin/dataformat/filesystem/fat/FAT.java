@@ -162,110 +162,126 @@ public abstract class FAT {
 	protected static class FatEntryState {
 		protected FatEntry entry = null;
 		protected byte[] lfn = null;
-		protected int lfnUsed = 0;
+		protected int lfnPos = 0;
 		protected int lastLFNSequence = -1;
+		protected byte lfnChecksum = 0;
 		
 		protected void end(List<FatEntry> entries) {
 			if (lastLFNSequence == 1) {
 				int nb = 0;
-				while (nb < lfn.length && lfn[nb] != 0)
-					nb++;
-				entry.longName = new String(lfn, 0, nb, StandardCharsets.UTF_16);
+				while (nb < lfn.length - lfnPos && (lfn[lfnPos + nb] != 0 || lfn[lfnPos + nb + 1] != 0))
+					nb += 2;
+				entry.longName = new String(lfn, lfnPos, nb, StandardCharsets.UTF_16LE);
 			}
+			entries.add(entry);
+			reset();
+		}
+		
+		protected void reset() {
 			lfn = null;
 			lastLFNSequence = -1;
-			lfnUsed = 0;
-			entries.add(entry);
-			entry = null;
+			lfnPos = -1;
+			entry = null;			
 		}
 	}
 	
 	protected boolean readDirectoryEntry(byte[] sector, int offset, FatEntryState currentState, List<FatEntry> entries) {
-		if (sector[offset] == 0) {
-			if (currentState.entry != null)
-				currentState.end(entries);
+		if (sector[offset] == 0)
 			return false; // end of directory
-		}
 		if ((sector[offset] & 0xFF) == 0xE5) {
-			if (currentState.entry == null)
-				return true;
-			currentState.end(entries);
+			currentState.reset();
 			return true;
 		}
 		byte attr = sector[offset + 0x0B];
 		if (attr == 0x0F) {
 			// LFN
-			if (currentState.entry == null)
-				return true;
+			/*
 			byte sum = 0;
 			int dot = currentState.entry.shortName.indexOf('.');
+			if (dot == -1) dot = currentState.entry.shortName.length();
 			for (int i = 0; i < 8; ++i) {
-				int val = dot > i ? currentState.entry.shortName.charAt(i) : 0x20;
+				byte val = dot > i ? (byte)currentState.entry.shortName.charAt(i) : 0x20;
 				sum = (byte)((byte)(((sum & 1) << 7) + ((sum & 0xFE) >> 1)) + (byte)val);
 			}
 			for (int i = 0; i < 3; ++i) {
-				int val = currentState.entry.shortName.length() > dot + 1 + i ? currentState.entry.shortName.charAt(dot + 1 + i) : 0x20;
+				byte val = currentState.entry.shortName.length() > dot + 1 + i ? (byte)currentState.entry.shortName.charAt(dot + 1 + i) : 0x20;
 				sum = (byte)((byte)(((sum & 1) << 7) + ((sum & 0xFE) >> 1)) + (byte)val);
 			}
-			if ((sector[offset + 0x0D]) != sum) {
+			int sum2 = 0;
+			for (int i = 0; i < 8; ++i) {
+				byte val = dot > i ? (byte)currentState.entry.shortName.charAt(i) : 0x20;
+				sum2 = val + (((sum2 & 1) << 7) + ((sum2 & 0xfe) >> 1));
+			}
+			for (int i = 0; i < 3; ++i) {
+				byte val = currentState.entry.shortName.length() > dot + 1 + i ? (byte)currentState.entry.shortName.charAt(dot + 1 + i) : 0x20;
+				sum2 = val + (((sum2 & 1) << 7) + ((sum2 & 0xfe) >> 1));
+			}
+			if ((sector[offset + 0x0D]) != (byte)sum) {
 				currentState.lfn = null;
 				currentState.end(entries);
 				return true;
 			}
+			*/
 			if ((sector[offset] & 0x40) != 0) {
 				// first LFN entry
-				if (currentState.lastLFNSequence != -1) {
-					// not expected
-					currentState.lfn = null;
-					currentState.end(entries);
-					return true;
-				}
 				currentState.lastLFNSequence = sector[offset] & 0x1F;
 				currentState.lfn = new byte[20 * 26];
-			} else if ((sector[offset] & 0x1F) != currentState.lastLFNSequence - 1) {
+				currentState.lfnPos = currentState.lfn.length;
+				currentState.lfnChecksum = sector[offset + 0x0D];
+			} else if ((sector[offset] & 0x1F) != currentState.lastLFNSequence - 1 || sector[offset + 0x0D] != currentState.lfnChecksum) {
 				// not expected
-				currentState.lfn = null;
-				currentState.end(entries);
+				currentState.reset();
 				return true;
 			} else
 				currentState.lastLFNSequence--;
-			System.arraycopy(sector, offset + 1, currentState.lfn, currentState.lfnUsed, 10);
-			currentState.lfnUsed += 10;
-			System.arraycopy(sector, offset + 0x0E, currentState.lfn, currentState.lfnUsed, 12);
-			currentState.lfnUsed += 12;
-			System.arraycopy(sector, offset + 0x1C, currentState.lfn, currentState.lfnUsed, 4);
-			currentState.lfnUsed += 4;
-			if (currentState.lastLFNSequence == 1)
-				currentState.end(entries);
+			currentState.lfnPos -= 4;
+			System.arraycopy(sector, offset + 0x1C, currentState.lfn, currentState.lfnPos, 4);
+			currentState.lfnPos -= 12;
+			System.arraycopy(sector, offset + 0x0E, currentState.lfn, currentState.lfnPos, 12);
+			currentState.lfnPos -= 10;
+			System.arraycopy(sector, offset + 1, currentState.lfn, currentState.lfnPos, 10);
 			return true;
 		}
 		// DOS entry
-		if (currentState.entry != null)
-			currentState.end(entries);
 		if (sector[offset] == 0x2E) {
 			// dot
 			if ((attr & 0x10) != 0) {
 				// directory
-				if (sector[offset + 1] == ' ')
+				if (sector[offset + 1] == ' ') {
+					currentState.reset();
 					return true;
-				if (sector[offset + 1] == '.' && sector[offset + 2] == ' ')
+				}
+				if (sector[offset + 1] == '.' && sector[offset + 2] == ' ') {
+					currentState.reset();
 					return true;
+				}
 			}
 		}
 		currentState.entry = new FatEntry();
 		if (sector[offset] == 5) sector[offset] = (byte)0xE5;
-		currentState.entry.shortName = new String(sector, offset, 8, StandardCharsets.US_ASCII).trim() + '.' + new String(sector, offset + 8, 3, StandardCharsets.US_ASCII).trim();
+		currentState.entry.shortName = new String(sector, offset, 8, StandardCharsets.US_ASCII).trim();
+		String ext = new String(sector, offset + 8, 3, StandardCharsets.US_ASCII).trim();
+		if (ext.length() > 0) currentState.entry.shortName += "." + ext;
 		currentState.entry.attributes = attr;
 		currentState.entry.cluster = DataUtil.readUnsignedShortLittleEndian(sector, offset + 0x1A);
 		if (fatEntryBits == 32)
 			currentState.entry.cluster |= ((long)DataUtil.readUnsignedShortLittleEndian(sector, offset + 0x14)) << 16;
 		currentState.entry.size = DataUtil.readUnsignedIntegerLittleEndian(sector, offset + 0x1C);
 		// TODO dates...
+		
+		if (currentState.lastLFNSequence == 1) {
+			int sum = 0;
+			for (int i = 0; i < 11; ++i)
+				sum = sector[offset + i] + (((sum & 1) << 7) + ((sum & 0xfe) >> 1));
+			if (currentState.lfnChecksum != (byte)(sum & 0xFF))
+				currentState.lastLFNSequence = -1;
+		}
+		currentState.end(entries);
 		return true;
 	}
 	
 	protected void readDirectory(long firstCluster, AsyncCollection<FatEntry> listener) {
-		readDirectory(firstCluster, new FatEntryState(), new byte[512], listener);
+		readDirectory(firstCluster, new FatEntryState(), new byte[sectorsPerCluster * bytesPerSector], listener);
 	}
 
 	private void readDirectory(long cluster, FatEntryState state, byte[] buffer, AsyncCollection<FatEntry> listener) {
@@ -276,12 +292,12 @@ public abstract class FAT {
 				listener.error(read.getError());
 				return;
 			}
-			if (read.getResult().intValue() != 512) {
+			if (read.getResult().intValue() != buffer.length) {
 				listener.error(new IOException("Unexpected end of FAT file system"));
 				return;
 			}
 			List<FatEntry> entries = new ArrayList<>(32);
-			for (int i = 0; i < 32; ++i) {
+			for (int i = 0; i < buffer.length / 32; ++i) {
 				if (!readDirectoryEntry(buffer, i * 32, state, entries)) {
 					if (!entries.isEmpty())
 						listener.newElements(entries);
@@ -293,14 +309,9 @@ public abstract class FAT {
 				listener.newElements(entries);
 			getNextCluster(cluster, buffer).listenInline(
 				(res) -> {
-					if (res == -1) {
-						if (state.entry != null) {
-							entries.clear();
-							state.end(entries);
-							listener.newElements(entries);
-						}
+					if (res == -1)
 						listener.done();
-					} else
+					else
 						readDirectory(res, state, buffer, listener);
 				},
 				(error) -> { listener.error(error); },
