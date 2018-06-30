@@ -6,12 +6,12 @@ import java.util.HashMap;
 import java.util.Map;
 
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.dataformat.microsoft.GUID;
 import net.lecousin.dataformat.microsoft.ole.KnownOLEPropertySet.IgnoreIt;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.properties.PropertiesContainer;
 import net.lecousin.framework.properties.Property;
+import net.lecousin.framework.util.GUIDUtil;
 import net.lecousin.framework.util.Pair;
 
 public class OLEPropertySet implements DataFormatInfo, PropertiesContainer {
@@ -26,7 +26,7 @@ public class OLEPropertySet implements DataFormatInfo, PropertiesContainer {
 	public Collection<Pair<ILocalizableString, Object>> getProperties() {
 		ArrayList<Pair<ILocalizableString,Object>> props = new ArrayList<>(properties.size());
 		KnownOLEPropertySet known = KnownOLEPropertySet_ExtensionPoint.instance.get(FMTID);
-		if (known == null) props.add(new Pair<>(new FixedLocalizedString("FMTID"), GUID.GUIDToString(FMTID)));
+		if (known == null) props.add(new Pair<>(new FixedLocalizedString("FMTID"), GUIDUtil.GUIDToString(FMTID)));
 		for (Map.Entry<Long,OLEProperty> e : properties.entrySet()) {
 			if (e.getKey().longValue() == 1) continue; // codepage
 			ILocalizableString name = null;

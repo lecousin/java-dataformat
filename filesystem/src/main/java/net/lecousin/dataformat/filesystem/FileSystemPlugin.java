@@ -12,6 +12,8 @@ public class FileSystemPlugin implements DataFormatPlugin {
 	public DataFormat[] getFormats() {
 		return new DataFormat[] {
 			MBRDataFormat.instance,
+			EFIPartDataFormat.instance,
+			MBRLegacyToEFIPartDataFormat.instance,
 			PhysicalDrivesDataFormat.instance
 		};
 	}
@@ -19,13 +21,15 @@ public class FileSystemPlugin implements DataFormatPlugin {
 	@Override
 	public DataFormatDetector[] getDetectors() {
 		return new DataFormatDetector[] {
-			new MBRDetector()
+			new MBRDetector(),
+			new EFIPartDetector()
 		};
 	}
 
 	@Override
 	public DataFormatSpecializationDetector[] getSpecializationDetectors() {
 		return new DataFormatSpecializationDetector[] {
+			new MBRLegacyToEFIPartDetector()
 		};
 	}
 

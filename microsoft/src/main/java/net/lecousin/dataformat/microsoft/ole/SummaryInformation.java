@@ -1,12 +1,12 @@
 package net.lecousin.dataformat.microsoft.ole;
 
-import net.lecousin.dataformat.microsoft.GUID;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
+import net.lecousin.framework.util.GUIDUtil;
 
 public class SummaryInformation implements KnownOLEPropertySet {
 
-	public static final byte[] FMTID = GUID.ToGUID(0xF29F85E0L, 0x4FF9, 0x1068, 0xAB91, 0x08002B27B3D9L);
+	public static final byte[] FMTID = GUIDUtil.ToGUID(0xF29F85E0L, 0x4FF9, 0x1068, 0xAB91, 0x08002B27B3D9L);
 	
 	public static final int TITLE = 0x00000002;
 	public static final int SUBJECT = 0x00000003;

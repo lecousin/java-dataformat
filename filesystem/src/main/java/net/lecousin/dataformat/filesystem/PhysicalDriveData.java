@@ -76,7 +76,7 @@ public class PhysicalDriveData extends Data {
 						RemoteJVM jvm = start.getResult();
 						AsyncWork<Object, Exception> open;
 						try {
-							open = jvm.callStatic(OpenDiskFromRemote.class.getMethod("openDisk", String.class), "PhysicalDrive0");
+							open = jvm.callStatic(OpenDiskFromRemote.class.getMethod("openDisk", String.class), drive.getOSId());
 						} catch (Exception err) {
 							result.error(IO.error(err));
 							return;

@@ -1,1 +1,3 @@
+partition identifier=identifiant de partition
+partition type=type de partition
 physical drives=lecteurs physiques

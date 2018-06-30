@@ -29,7 +29,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 
 	public static final MBRDataFormat instance = new MBRDataFormat();
 	
-	private MBRDataFormat() { /* singleton. */ }
+	protected MBRDataFormat() { /* singleton. */ }
 	
 	@Override
 	public ILocalizableString getName() {
@@ -56,6 +56,8 @@ public class MBRDataFormat implements ContainerDataFormat {
 	public AsyncWork<DataFormatInfo, Exception> getInfo(Data data, byte priority) {
 		return null;
 	}
+	
+	public static final String DATA_PROPERTY_PARTITION = "Partition";
 
 	public static OpenedDataCache<Partitions> cache = new OpenedDataCache<Partitions>(Partitions.class, 5*60*1000) {
 
@@ -87,7 +89,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 					partition.partitionInfo = p;
 					if (p.start > 0) {
 						partition.data = new SubData(data, p.start, p.size, new FixedLocalizedString("Partition " + index++));
-						partition.data.setProperty("Partition", p);
+						partition.data.setProperty(DATA_PROPERTY_PARTITION, p);
 					}
 					partitions.list.add(partition);
 				}
@@ -102,7 +104,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 		}
 
 		@Override
-		protected void close(Partitions vdi) {
+		protected void close(Partitions partitions) {
 		}
 		
 	};
@@ -152,7 +154,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
 		// TODO Auto-generated method stub
 		DataCommonProperties p = new DataCommonProperties();
-		p.size = BigInteger.valueOf(((DiskPartition)subData.getProperty("Partition")).size);
+		p.size = BigInteger.valueOf(((DiskPartition)subData.getProperty(DATA_PROPERTY_PARTITION)).size);
 		return p;
 	}
 }

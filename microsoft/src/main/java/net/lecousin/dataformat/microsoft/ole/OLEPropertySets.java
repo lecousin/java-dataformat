@@ -4,12 +4,12 @@ import java.util.ArrayList;
 import java.util.Collection;
 
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.dataformat.microsoft.GUIDRenderer;
 import net.lecousin.framework.collections.LinkedArrayList;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.properties.PropertiesContainer;
 import net.lecousin.framework.uidescription.annotations.name.FixedName;
 import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.render.GUIDRenderer;
 import net.lecousin.framework.uidescription.annotations.render.Render;
 import net.lecousin.framework.util.Pair;
 
