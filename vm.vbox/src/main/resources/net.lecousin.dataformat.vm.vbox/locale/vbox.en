@@ -5,4 +5,4 @@ comment=comment
 disk image=disk image
 disk size=disk size
 version=version
-Virtual Disk Image Type=allocation type
+virtual disk image type=allocation type

@@ -26,7 +26,7 @@ public class OLEPropertySet implements DataFormatInfo, PropertiesContainer {
 	public Collection<Pair<ILocalizableString, Object>> getProperties() {
 		ArrayList<Pair<ILocalizableString,Object>> props = new ArrayList<>(properties.size());
 		KnownOLEPropertySet known = KnownOLEPropertySet_ExtensionPoint.instance.get(FMTID);
-		if (known == null) props.add(new Pair<>(new FixedLocalizedString("FMTID"), GUIDUtil.GUIDToString(FMTID)));
+		if (known == null) props.add(new Pair<>(new FixedLocalizedString("FMTID"), GUIDUtil.toString(FMTID)));
 		for (Map.Entry<Long,OLEProperty> e : properties.entrySet()) {
 			if (e.getKey().longValue() == 1) continue; // codepage
 			ILocalizableString name = null;

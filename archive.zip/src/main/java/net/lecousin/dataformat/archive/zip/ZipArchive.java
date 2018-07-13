@@ -175,7 +175,7 @@ public class ZipArchive implements Closeable {
 					return;
 				}
 				if (logger.debug())
-					logger.debug("Unable to read central directory (" + open.done.getError().getMessage() + "), start scanning zip file " + io.getSourceDescription());
+					logger.debug("Unable to read central directory (" + open.done.getError() + "), start scanning zip file " + io.getSourceDescription());
 				// extractor failed, we can try the scanner
 				AsyncWork<Long,IOException> restart = io.seekAsync(SeekType.FROM_BEGINNING, 0);
 				ZipArchiveScanner scan = new ZipArchiveScanner(io, new EntryListener() {

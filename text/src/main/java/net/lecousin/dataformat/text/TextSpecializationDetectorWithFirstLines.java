@@ -46,7 +46,7 @@ public class TextSpecializationDetectorWithFirstLines implements DataFormatSpeci
 	
 	public static interface Plugin extends net.lecousin.framework.plugins.Plugin {
 		public DataFormat[] getDetectedFormats();
-		public DataFormat detect(Data data, ArrayList<UnprotectedString> lines);
+		public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars);
 	}
 	
 	@Override
@@ -109,7 +109,7 @@ public class TextSpecializationDetectorWithFirstLines implements DataFormatSpeci
 				if (lines.isEmpty())
 					return null;
 				for (Plugin pi : ExtensionPoint.plugins) {
-					DataFormat f = pi.detect(data, lines);
+					DataFormat f = pi.detect(data, lines, chars, nb);
 					if (f != null)
 						return f;
 				}

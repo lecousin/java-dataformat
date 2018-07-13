@@ -5,8 +5,8 @@ import java.nio.charset.Charset;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
 public class TextDataFormat implements DataFormat {
@@ -19,8 +19,7 @@ public class TextDataFormat implements DataFormat {
 	
 	@Override
 	public ILocalizableString getName() {
-		// TODO Auto-generated method stub
-		return new FixedLocalizedString("Text");
+		return new LocalizableString("dataformat.text", "Text");
 	}
 	
 	@Override
@@ -33,7 +32,9 @@ public class TextDataFormat implements DataFormat {
 		return new String[] { "txt" };
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net/lecousin/dataformat/text/text_", ".png", 16, 32, 128);
+	// source: https://www.iconfinder.com/icons/9088/document_enriched_list_paper_text_icon (Creative Commons (Attribution-NonCommercial-NoDerivs 2.5 Generic))
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.text/images/text_", ".png", 16, 32, 48, 64, 128);
+	
 	@Override
 	public IconProvider getIconProvider() { return iconProvider; }
 	

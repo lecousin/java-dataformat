@@ -9,8 +9,8 @@ import java.util.List;
 import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
+import net.lecousin.dataformat.filesystem.ext.ExtFS.INode;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.Task;
@@ -36,7 +36,8 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 		return new FixedLocalizedString("Ext File System");
 	}
 	
-	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.filesystem.ext/images/hd-linux-", ".png", 16, 22, 32, 128);
+	// source: http://www.iconarchive.com/show/nuoveXT-icons-by-saki/Filesystems-hd-linux-icon.html (GPL)
+	public static final IconProvider iconProvider = new IconProvider.FromPath("net.lecousin.dataformat.filesystem.ext/images/hd-linux-", ".png", 16, 24, 32, 48, 64, 96, 128);
 	
 	@Override
 	public IconProvider getIconProvider() {
@@ -54,8 +55,20 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<DataFormatInfo, Exception> getInfo(Data data, byte priority) {
-		return null;
+	public AsyncWork<ExtFSDataFormatInfo, Exception> getInfo(Data data, byte priority) {
+		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(data, this, priority, null, 0);
+		AsyncWork<ExtFSDataFormatInfo, Exception> result = new AsyncWork<>();
+		getCache.listenAsync(new Task.Cpu.FromRunnable("Get Ext File System information", priority, () -> {
+			ExtFS fs = getCache.getResult().get();
+			ExtFSDataFormatInfo info = new ExtFSDataFormatInfo();
+			info.blockSize = fs.blockSize;
+			info.blocksPerGroup = fs.blocksPerGroup;
+			info.inodesPerGroup = fs.inodesPerGroup;
+			info.inodeSize = fs.inodeSize;
+			info.uuid = fs.uuid;
+			result.unblockSuccess(info);
+		}), result);
+		return result;
 	}
 
 	public static OpenedDataCache<ExtFS> cache = new OpenedDataCache<ExtFS>(ExtFS.class, 5*60*1000) {
@@ -201,14 +214,25 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	}
 
 	@Override
-	public Class<? extends DataCommonProperties> getSubDataCommonProperties() {
-		return DataCommonProperties.class;
+	public Class<ExtFSEntryProperties> getSubDataCommonProperties() {
+		return ExtFSEntryProperties.class;
 	}
 
 	@Override
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
-		DataCommonProperties p = new DataCommonProperties();
-		p.size = BigInteger.valueOf(((ExtFSData)subData).getSize());
+		ExtFSData d = (ExtFSData)subData;
+		AsyncWork<INode, IOException> load = d.entry.loadINode();
+		ExtFSEntryProperties p = new ExtFSEntryProperties();
+		p.size = BigInteger.valueOf(d.getSize());
+		load.block(0);
+		if (load.isSuccessful()) {
+			INode inode = load.getResult();
+			p.lastAccessTime = inode.lastAccessTime * 1000;
+			p.lastModificationTime = inode.lastModificationTime * 1000;
+			p.hardLinks = inode.hardLinks;
+			p.uid = inode.uid;
+			p.gid = inode.gid;
+		}
 		return p;
 	}
 

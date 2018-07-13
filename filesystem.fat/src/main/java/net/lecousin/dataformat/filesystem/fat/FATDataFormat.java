@@ -6,7 +6,6 @@ import java.util.ArrayList;
 import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
-import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.AsyncCollection;
@@ -80,9 +79,20 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 	};
 
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
-		// TODO Auto-generated method stub
-		return null;
+	public AsyncWork<FATDataFormatInfo, Exception> getInfo(Data data, byte priority) {
+		AsyncWork<FATDataFormatInfo, Exception> result = new AsyncWork<>();
+		AsyncWork<CachedObject<FAT>, Exception> getCache = cache.open(data, this, priority, null, 0);
+		getCache.listenAsync(new Task.Cpu.FromRunnable("Get FAT File System information", priority, () -> {
+			FAT fs = getCache.getResult().get();
+			FATDataFormatInfo info = new FATDataFormatInfo();
+			info.bytesPerSector = fs.bytesPerSector;
+			info.sectorsPerCluster = fs.sectorsPerCluster;
+			info.volumeLabel = fs.volumeLabel;
+			info.serialNumber = fs.serialNumber;
+			info.formatterSystem = fs.formatterSystem;
+			result.unblockSuccess(info);
+		}), result);
+		return result;
 	};
 	
 	@Override
@@ -129,8 +139,6 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 
 	@Override
 	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
-		// TODO Auto-generated method stub
-		
 	}
 
 	@Override

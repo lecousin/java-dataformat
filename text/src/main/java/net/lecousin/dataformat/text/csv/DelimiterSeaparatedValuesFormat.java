@@ -1,5 +1,6 @@
-package net.lecousin.dataformat.text;
+package net.lecousin.dataformat.text.csv;
 
+import net.lecousin.dataformat.text.TextDataFormat;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 

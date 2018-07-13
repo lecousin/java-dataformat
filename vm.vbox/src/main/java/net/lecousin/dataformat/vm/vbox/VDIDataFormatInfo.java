@@ -4,6 +4,8 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.vm.vbox.VirtualBoxDiskImage.ImageType;
 import net.lecousin.framework.uidescription.annotations.name.FixedName;
 import net.lecousin.framework.uidescription.annotations.name.LocalizedName;
+import net.lecousin.framework.uidescription.annotations.render.Render;
+import net.lecousin.framework.uidescription.annotations.render.RendererSize;
 
 public class VDIDataFormatInfo implements DataFormatInfo {
 
@@ -17,9 +19,11 @@ public class VDIDataFormatInfo implements DataFormatInfo {
 	public String comment;
 	
 	@LocalizedName(namespace="dataformat.vm.vbox",key="Disk size")
+	@Render(RendererSize.class)
 	public long size;
 	
 	@LocalizedName(namespace="dataformat.vm.vbox",key="Block size")
+	@Render(RendererSize.class)
 	public long blockSize;
 	
 	@LocalizedName(namespace="dataformat.vm.vbox",key="Blocks number")

@@ -5,6 +5,8 @@ import net.lecousin.dataformat.core.DataFormatDetector;
 import net.lecousin.dataformat.core.DataFormatPlugin;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
 import net.lecousin.dataformat.core.operations.IOperation;
+import net.lecousin.dataformat.text.csv.DelimiterSeaparatedValuesFormat;
+import net.lecousin.dataformat.text.xml.XMLDataFormat;
 
 public class TextDataFormatPlugin implements DataFormatPlugin {
 
@@ -12,7 +14,8 @@ public class TextDataFormatPlugin implements DataFormatPlugin {
 	public DataFormat[] getFormats() {
 		return new DataFormat[] {
 			TextDataFormat.instance,
-			DelimiterSeaparatedValuesFormat.instance
+			DelimiterSeaparatedValuesFormat.instance,
+			XMLDataFormat.instance
 		};
 	}
 	

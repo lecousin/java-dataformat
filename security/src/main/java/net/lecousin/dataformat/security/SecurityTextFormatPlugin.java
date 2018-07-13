@@ -17,7 +17,7 @@ public class SecurityTextFormatPlugin implements TextSpecializationDetectorWithF
 	}
 	
 	@Override
-	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines) {
+	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars) {
 		UnprotectedString line = lines.get(0);
 		if (line.length() >= 15 &&
 			line.charAt(0) == '-' &&

@@ -18,6 +18,7 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 import net.lecousin.framework.system.hardware.DiskPartition;
@@ -33,8 +34,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	
 	@Override
 	public ILocalizableString getName() {
-		// TODO Auto-generated method stub
-		return new FixedLocalizedString("Disk");
+		return new LocalizableString("dataformat.filesystem", "Disk");
 	}
 	
 	@Override

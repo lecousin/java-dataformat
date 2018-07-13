@@ -1,9 +1,10 @@
-package net.lecousin.dataformat.text;
+package net.lecousin.dataformat.text.csv;
 
 import java.util.ArrayList;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
+import net.lecousin.dataformat.text.TextSpecializationDetectorWithFirstLines;
 import net.lecousin.framework.util.UnprotectedString;
 
 public class DelimiterSeparatedValueDetector implements TextSpecializationDetectorWithFirstLines.Plugin {
@@ -18,7 +19,7 @@ public class DelimiterSeparatedValueDetector implements TextSpecializationDetect
 	}
 	
 	@Override
-	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines) {
+	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars) {
 		if (lines.size() < 2)
 			return null; // if only one line, we cannot check there is the same number of columns, so we cannot tell the format
 		// try to detect most common: comma, tab, colon, pipe
