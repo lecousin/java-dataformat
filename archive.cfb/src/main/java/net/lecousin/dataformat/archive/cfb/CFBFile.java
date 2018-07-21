@@ -37,7 +37,7 @@ public class CFBFile implements Closeable {
 		if (io instanceof IO.Readable.Buffered)
 			this.io = io;
 		else
-			this.io = new BufferedIO.ReadOnly(io, 512, 4096, io.getSizeSync(), true);
+			this.io = new BufferedIO(io, io.getSizeSync(), 512, 4096, true);
 		if (load)
 			load(progress, work);
 		else if (progress != null)

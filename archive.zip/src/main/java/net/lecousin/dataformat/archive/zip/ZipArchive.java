@@ -283,7 +283,7 @@ public class ZipArchive implements Closeable {
 				if (zip.io != null) {
 					synchronized (zip) {
 						if (zip.ioSeekBuf == null) {
-							zip.ioSeekBuf = new BufferedIO.ReadOnly((IO.Readable.Seekable)zip.io, 8192, ((IO.KnownSize)zip.io).getSizeSync());
+							zip.ioSeekBuf = new BufferedIO((IO.Readable.Seekable)zip.io, 8192, 8192, true);
 						}
 					}
 					input = new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)zip.ioSeekBuf, offset, ((IO.KnownSize)zip.io).getSizeSync()-offset, zip.io.getSourceDescription()+'/'+filename+" [local header]", false);

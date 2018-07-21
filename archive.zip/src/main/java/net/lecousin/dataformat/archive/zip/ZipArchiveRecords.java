@@ -25,15 +25,15 @@ class ZipArchiveRecords {
 	static SynchronizationPoint<IOException> readCentralDirectory(IO.Readable.Buffered input, Listener<ZippedFile> listener) {
 		SynchronizationPoint<IOException> sp = new SynchronizationPoint<>();
 		byte[] pk = new byte[4];
-		readNextCentralDirectoryEntry(input, listener, pk, true, sp);
+		readNextCentralDirectoryEntry(input, listener, pk, true, sp, 0);
 		return sp;
 	}
 	
-	private static void readNextCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp) {
+	private static void readNextCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp, int recursCount) {
 		AsyncWork<Integer, IOException> r = input.readFullySyncIfPossible(ByteBuffer.wrap(pk));
 		if (!r.isUnblocked()) {
 			r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP central directory", input.getPriority(), () -> {
-				readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue());
+				readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue(), 0);
 			}), sp);
 			return;
 		}
@@ -45,10 +45,10 @@ class ZipArchiveRecords {
 			sp.cancel(r.getCancelEvent());
 			return;
 		}
-		readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue());
+		readCentralDirectoryEntry(input, listener, pk, firstEntry, sp, r.getResult().intValue(), recursCount + 1);
 	}
 	
-	private static void readCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp, int nbRead) {
+	private static void readCentralDirectoryEntry(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, boolean firstEntry, SynchronizationPoint<IOException> sp, int nbRead, int recursCount) {
 		if (nbRead != 4) {
 			if (firstEntry) {
 				sp.error(new IOException("Unexpected end of file at the beginning of ZIP central directory"));
@@ -68,7 +68,7 @@ class ZipArchiveRecords {
 		AsyncWork<ZippedFile, IOException> r = readCentralDirectoryEntry(input);
 		if (!r.isUnblocked()) {
 			r.listenAsync(new Task.Cpu.FromRunnable("Read ZIP central directory", input.getPriority(), () -> {
-				centralDirectoryEntryRead(input, listener, pk, sp, r.getResult());
+				centralDirectoryEntryRead(input, listener, pk, sp, r.getResult(), 0);
 			}), sp);
 			return;
 		}
@@ -80,13 +80,18 @@ class ZipArchiveRecords {
 			sp.cancel(r.getCancelEvent());
 			return;
 		}
-		centralDirectoryEntryRead(input, listener, pk, sp, r.getResult());
+		centralDirectoryEntryRead(input, listener, pk, sp, r.getResult(), recursCount + 1);
 	}
 	
-	private static void centralDirectoryEntryRead(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, SynchronizationPoint<IOException> sp, ZippedFile entry) {
+	private static void centralDirectoryEntryRead(IO.Readable.Buffered input, Listener<ZippedFile> listener, byte[] pk, SynchronizationPoint<IOException> sp, ZippedFile entry, int recursCount) {
 		if (listener != null)
 			listener.fire(entry);
-		readNextCentralDirectoryEntry(input, listener, pk, false, sp);
+		if (recursCount < 100)
+			readNextCentralDirectoryEntry(input, listener, pk, false, sp, recursCount + 1);
+		else
+			new Task.Cpu.FromRunnable("Read ZIP central directory", input.getPriority(), () -> {
+				readNextCentralDirectoryEntry(input, listener, pk, false, sp, 0);
+			}).start();
 	}
 	
 	static AsyncWork<ZippedFile, IOException> readCentralDirectoryEntry(IO.Readable.Buffered input) {

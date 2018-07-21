@@ -35,12 +35,8 @@ class Rar5Loader extends RarLoader {
 			AsyncWorkListener<Long, IOException> listener = new AsyncWorkListener<Long, IOException>() {
 				@Override
 				public void ready(Long result) {
-					try { rar.io = new BufferedIO.ReadOnly(rar.io, 4096, result.longValue()); }
-					catch (IOException e) {
-						canStart.error(e);
-						return;
-					}
-					((BufferedIO.ReadOnly)rar.io).canStartReading().listenInline(canStart);
+					rar.io = new BufferedIO(rar.io, result.longValue(), 4096, 4096, false);
+					((BufferedIO)rar.io).canStartReading().listenInline(canStart);
 				}
 				@Override
 				public void cancelled(CancelException event) {

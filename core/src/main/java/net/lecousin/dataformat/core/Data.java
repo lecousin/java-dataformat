@@ -120,11 +120,7 @@ public abstract class Data {
 								io = oio;
 							} else {
 								// it is not buffered, let's add this feature
-								try { io = new BufferedIO.ReadOnly((IO.Readable.Seekable)oio, 512, 16384, getSize(), false); }
-								catch (IOException e) {
-									ioLoading.unblockError(e);
-									return;
-								}
+								io = new BufferedIO((IO.Readable.Seekable)oio, getSize(), 512, 16384, false);
 							}
 						} else {
 							// only streaming, let's make it better

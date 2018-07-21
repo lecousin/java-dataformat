@@ -48,7 +48,7 @@ public class PNGReader {
 			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, 4096, (int)(size-4096)));
 		if (size <= 8192+32768)
 			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, 8192, (int)(size-8192)));
-		return readFromBuffered(new BufferedIO.ReadOnly(io, 4096, 65536, size, true));
+		return readFromBuffered(new BufferedIO(io, size, 4096, 65536, true));
 	}
 	
 	public static <T extends IO.Readable.Seekable&IO.Readable.Buffered> AsyncWork<BufferedImage,Exception> readFromBuffered(T io) {
