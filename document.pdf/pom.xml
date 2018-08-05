@@ -18,7 +18,7 @@
     <dependency>
     	<groupId>net.lecousin.framework</groupId>
     	<artifactId>log.bridges.commons-logging</artifactId>
-    	<version>0.13.1</version>
+    	<version>0.13.2</version>
     </dependency>
   	<dependency>
   		<groupId>org.apache.pdfbox</groupId>
