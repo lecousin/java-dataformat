@@ -7,6 +7,8 @@ import net.lecousin.framework.application.Artifact;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.application.Version;
 import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.tasks.drives.DirectoryReader;
+import net.lecousin.framework.io.util.FileInfo;
 import net.lecousin.framework.util.DirectoryWalker;
 import net.lecousin.framework.util.Pair;
 
@@ -34,19 +36,16 @@ public class TestZipCreator {
 			return;
 		}
 		long start = System.nanoTime();
-		new DirectoryWalker<String>(dir) {
+		new DirectoryWalker<String>(dir, null, new DirectoryReader.Request()) {
 			@Override
-			protected String directoryFound(String parent, File dir) {
-				if (parent == null)
-					return dir.getName();
-				return parent + "/" + dir.getName();
+			protected String directoryFound(String parent, FileInfo dir, String path) {
+				return path;
 			}
 			@Override
-			protected void fileFound(String parent, File file) {
-				String path = parent == null ? file.getName() : parent + '/' + file.getName();
-				zip.add(file, path);
+			protected void fileFound(String parent, FileInfo file, String path) {
+				zip.add(file.file, path);
 			}
-		}.start(Task.PRIORITY_NORMAL).listenInline(new Runnable() {
+		}.start(Task.PRIORITY_NORMAL, null, 0).listenInline(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println("End of walk");
