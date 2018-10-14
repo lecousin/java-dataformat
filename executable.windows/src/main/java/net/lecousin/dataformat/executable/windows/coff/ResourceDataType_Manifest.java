@@ -42,7 +42,7 @@ public class ResourceDataType_Manifest implements DataFormat {
 					bio = (IO.Readable.Buffered)io;
 				else
 					bio = new SimpleBufferedReadable(io, 4096);
-				AsyncWork<XMLStreamReader, Exception> xml = XMLStreamReader.start(bio, 1024);
+				AsyncWork<XMLStreamReader, Exception> xml = XMLStreamReader.start(bio, 1024, 8);
 				xml.listenAsync(new Task.Cpu<Void, NoException>("Read COFF manifest", priority) {
 					@Override
 					public Void run() {
