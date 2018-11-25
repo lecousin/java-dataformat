@@ -1,7 +1,6 @@
 package net.lecousin.dataformat.image.png;
 
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
@@ -76,8 +75,6 @@ public class PNGReaderOp implements DataFormatReadOperation.OneToOne<PNGDataForm
 								sp.cancel(event);
 							}
 						});
-					} catch (IOException e) {
-						sp.unblockError(e);
 					} finally {
 						// TODO better progress
 						if (progress != null) progress.progress(work-work/4);

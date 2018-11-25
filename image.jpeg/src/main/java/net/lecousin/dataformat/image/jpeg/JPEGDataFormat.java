@@ -156,7 +156,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 				if (b == 0xFF) {
 					b = io.read();
 					if (b != 0) {
-						io.seekSync(SeekType.FROM_CURRENT, -1);
+						io.seekSync(SeekType.FROM_CURRENT, -2);
 						return;
 					}
 				}

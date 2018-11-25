@@ -89,6 +89,7 @@ public class ComparePerf {
 			LCCore.stop(true);
 		} catch (Throwable t) {
 			t.printStackTrace();
+			System.exit(1);
 		}
 	}
 	

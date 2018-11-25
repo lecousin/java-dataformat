@@ -36,14 +36,14 @@ import net.lecousin.framework.math.FragmentedRangeLong;
 public class PNGReader {
 
 	@SuppressWarnings("resource")
-	public static <T extends IO.Readable.Seekable&IO.KnownSize> AsyncWork<BufferedImage,Exception> readFromSeekable(T io) throws IOException {
+	public static <T extends IO.Readable.Seekable&IO.KnownSize> AsyncWork<BufferedImage,Exception> readFromSeekable(T io) {
 		if (io instanceof IO.Readable.Buffered)
 			return readFromBuffered((IO.Readable.Seekable&IO.Readable.Buffered)io);
 		long size;
 		try { size = io.getSizeSync(); }
 		catch (IOException e) { return new AsyncWork<>(null, e); }
 		if (size <= 4096)
-			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, (int)size, 0));
+			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, (int)size, 0)); // TODO we should load it and be able to read from memory without transfering bytes to new buffers
 		if (size <= 4096+8192)
 			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, 4096, (int)(size-4096)));
 		if (size <= 8192+32768)
