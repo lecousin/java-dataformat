@@ -3,9 +3,9 @@ package net.lecousin.dataformat.filesystem.fat;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.util.StringUtil;
+import net.lecousin.framework.text.StringUtil;
 
 public class FAT12 extends FAT1216 {
 	
@@ -24,12 +24,12 @@ public class FAT12 extends FAT1216 {
 	}
 	
 	@Override
-	protected AsyncWork<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
+	protected AsyncSupplier<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
 		long pos = reservedSectors * bytesPerSector;
 		long posInFat = 3 * (cluster / 2);
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(pos + posInFat, ByteBuffer.wrap(buffer, 0, 3));
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		read.listenInline((nb) -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(pos + posInFat, ByteBuffer.wrap(buffer, 0, 3));
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		read.onDone((nb) -> {
 			if (nb != 3) {
 				result.error(new IOException("Unexpected end of FAT file system"));
 				return;

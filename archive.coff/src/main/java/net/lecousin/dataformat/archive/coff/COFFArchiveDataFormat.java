@@ -11,11 +11,12 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -38,12 +39,12 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 	public static OpenedDataCache<COFFArchive> cache = new OpenedDataCache<COFFArchive>(COFFArchive.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<COFFArchive,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<COFFArchive,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
 			COFFArchive archive = new COFFArchive();
 			archive.scanContent(io, null, progress, work); // TODO be able to use an async collection
-			AsyncWork<COFFArchive,Exception> result = new AsyncWork<>();
-			SynchronizationPoint<IOException> sp = archive.contentReady();
-			sp.listenInline(new Runnable() {
+			AsyncSupplier<COFFArchive,Exception> result = new AsyncSupplier<>();
+			Async<IOException> sp = archive.contentReady();
+			sp.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (sp.hasError()) result.error(sp.getError());
@@ -66,9 +67,9 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 	};
 
 	@Override
-	public AsyncWork<ArchiveDataInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<ArchiveDataInfo, Exception> result = new AsyncWork<ArchiveDataInfo, Exception>();
-		cache.open(data, this, priority, null, 0).listenInline(new AsyncWorkListener<CachedObject<COFFArchive>, Exception>() {
+	public AsyncSupplier<ArchiveDataInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<ArchiveDataInfo, Exception> result = new AsyncSupplier<ArchiveDataInfo, Exception>();
+		cache.open(data, this, priority, null, 0).listen(new Listener<CachedObject<COFFArchive>, Exception>() {
 			@Override
 			public void ready(CachedObject<COFFArchive> cache) {
 				if (cache == null) {
@@ -106,18 +107,18 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading COFF archive");
-		AsyncWork<CachedObject<COFFArchive>, Exception> get = cache.open(container, COFFArchiveDataFormat.this, Task.PRIORITY_NORMAL, progress, 800);
-		new Task.Cpu.FromRunnable("Loading COFF", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<COFFArchive>, Exception> get = cache.open(container, COFFArchiveDataFormat.this, Priority.NORMAL, progress, 800);
+		Task.cpu("Loading COFF", Priority.IMPORTANT, t -> {
 			if (get.hasError()) {
 				listener.error(get.getError());
 				progress.error(get.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error opening COFF archive", get.getError());
-				return;
+				return null;
 			}
 			if (get.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			COFFArchive archive = get.getResult().get();
 			if (archive == null) {
@@ -125,7 +126,7 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
 				get.getResult().release(COFFArchiveDataFormat.this);
-				return;
+				return null;
 			}
 			ArrayList<Data> files = new ArrayList<>(archive.getContent().size());
 			for (COFFFile file : archive.getContent())
@@ -133,6 +134,7 @@ public class COFFArchiveDataFormat extends ArchiveDataFormat {
 			listener.elementsReady(files);
 			progress.done();
 			get.getResult().release(COFFArchiveDataFormat.this);
+			return null;
 		}).startOn(get, true);
 		return progress;
 	}

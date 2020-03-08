@@ -4,8 +4,8 @@ import net.lecousin.dataformat.compress.CompressedDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -58,12 +58,12 @@ public class GZipDataFormat extends CompressedDataFormat {
 	public static OpenedDataCache<GZipHeader> cache = new OpenedDataCache<GZipHeader>(GZipHeader.class, 30*1000) {
 
 		@Override
-		protected AsyncWork<GZipHeader, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<GZipHeader, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<GZipHeader, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<GZipHeader, Exception> result = new AsyncSupplier<>();
 			GZipHeader h = new GZipHeader();
-			h.read(io).listenInlineSP(() -> {
+			h.read(io).onDone(() -> {
 				result.unblockSuccess(h);
-			}, result);
+			}, result, e -> e);
 			if (progress != null) progress.progress(work);
 			return result;
 		}
@@ -80,9 +80,9 @@ public class GZipDataFormat extends CompressedDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data data, WorkProgress progress, long work) {
-		AsyncWork<Data, Exception> result = new AsyncWork<>();
-		cache.open(data, this, Task.PRIORITY_NORMAL, progress, work).listenInline((res) -> {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data data, WorkProgress progress, long work) {
+		AsyncSupplier<Data, Exception> result = new AsyncSupplier<>();
+		cache.open(data, this, Priority.NORMAL, progress, work).onDone((res) -> {
 			result.unblockSuccess(new GZippedData(data, res.get()));
 			res.release(GZipDataFormat.this);
 		}, result);
@@ -90,9 +90,9 @@ public class GZipDataFormat extends CompressedDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<GZipDataFormatInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<GZipDataFormatInfo, Exception> result = new AsyncWork<>();
-		cache.open(data, this, Task.PRIORITY_NORMAL, null, 0).listenInline((res) -> {
+	public AsyncSupplier<GZipDataFormatInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<GZipDataFormatInfo, Exception> result = new AsyncSupplier<>();
+		cache.open(data, this, Priority.NORMAL, null, 0).onDone((res) -> {
 			GZipDataFormatInfo info = new GZipDataFormatInfo();
 			info.comment = res.get().comment;
 			result.unblockSuccess(info);

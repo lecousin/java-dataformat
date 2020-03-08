@@ -1,14 +1,16 @@
 package net.lecousin.dataformat.image.bmp;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.image.ImageDataFormat;
 import net.lecousin.dataformat.image.bmp.io.DIBHeader;
 import net.lecousin.dataformat.image.bmp.io.DIBReader;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -52,44 +54,41 @@ public class DIBReaderOp implements DataFormatReadOperation.OneToOne<DIBDataForm
 	public static interface DIBImageProvider {
 		public static final String DATA_PROPERTY = "net.lecousin.dataformat.image.bmp.DIBImageProvider";
 		
-		<T extends IO.Readable.Buffered & IO.Readable.Seekable> AsyncWork<BufferedImage, Exception> provide(T io);
+		<T extends IO.Readable.Buffered & IO.Readable.Seekable> AsyncSupplier<BufferedImage, Exception> provide(T io);
 	}
 	
 	public static class DefaultProvider implements DIBImageProvider {
 		@Override
-		public <T extends IO.Readable.Buffered & IO.Readable.Seekable> AsyncWork<BufferedImage, Exception> provide(T io) {
+		public <T extends IO.Readable.Buffered & IO.Readable.Seekable> AsyncSupplier<BufferedImage, Exception> provide(T io) {
 			DIBHeader header = new DIBHeader();
-			AsyncWork<Integer, Exception> readHeader = DIBReader.readHeader(io, header, -1);
-			AsyncWork<BufferedImage, Exception> result = new AsyncWork<>();
-			readHeader.listenAsync(new Task.Cpu<Void, NoException>("Read DIB image", io.getPriority()) {
-				@Override
-				public Void run() {
-					if (readHeader.hasError()) { result.error(readHeader.getError()); return null; }
-					if (readHeader.isCancelled()) { result.cancel(readHeader.getCancelEvent()); return null; }
-					DIBReader.readBitmap(header, io).listenInline(result);
-					return null;
-				}
+			AsyncSupplier<Integer, Exception> readHeader = DIBReader.readHeader(io, header, -1);
+			AsyncSupplier<BufferedImage, Exception> result = new AsyncSupplier<>();
+			readHeader.thenStart("Read DIB image", io.getPriority(), (Task<Void, NoException> t) -> {
+				if (readHeader.hasError()) { result.error(readHeader.getError()); return null; }
+				if (readHeader.isCancelled()) { result.cancel(readHeader.getCancelEvent()); return null; }
+				DIBReader.readBitmap(header, io).forward(result);
+				return null;
 			}, true);
 			return result;
 		}
 	}
 	
 	@Override
-	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
+	public AsyncSupplier<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<? extends IO.Readable.Seekable, IOException> open = data.openReadOnly(priority);
 		DIBImageProvider provider = (DIBImageProvider)data.getProperty(DIBImageProvider.DATA_PROPERTY);
 		if (provider == null)
 			provider = new DefaultProvider();
 		DIBImageProvider p = provider;
-		AsyncWork<Pair<BufferedImage,Object>,Exception> result = new AsyncWork<>();
-		open.listenInline(new Runnable() {
+		AsyncSupplier<Pair<BufferedImage,Object>,Exception> result = new AsyncSupplier<>();
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				// TODO progress
 				if (open.hasError()) { result.error(open.getError()); return; }
 				if (open.isCancelled()) { result.cancel(open.getCancelEvent()); return; }
-				AsyncWork<BufferedImage, Exception> img = p.provide((IO.Readable.Buffered & IO.Readable.Seekable)open.getResult());
-				img.listenInline(new Runnable() {
+				AsyncSupplier<BufferedImage, Exception> img = p.provide((IO.Readable.Buffered & IO.Readable.Seekable)open.getResult());
+				img.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (progress != null) progress.progress(work); // TODO

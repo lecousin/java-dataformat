@@ -4,6 +4,7 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.model.ModelBlock;
 import net.lecousin.framework.adapter.Adapter;
+import net.lecousin.framework.adapter.AdapterException;
 
 public class DataToModel implements Adapter<Data, ModelBlock> {
 
@@ -13,11 +14,15 @@ public class DataToModel implements Adapter<Data, ModelBlock> {
 	}
 
 	@Override
-	public ModelBlock adapt(Data input) throws Exception {
+	public ModelBlock adapt(Data input) throws AdapterException {
 		DataFormat format = input.detectFormatSync();
 		if (format == null)
 			return null;
-		return format.getModel(input).blockResult(0);
+		try {
+			return format.getModel(input).blockResult(0);
+		} catch (Exception e) {
+			throw new AdapterException("Error converting Data to Model", e);
+		}
 	}
 
 	@Override

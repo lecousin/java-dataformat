@@ -10,10 +10,9 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.image.ImageDataFormat;
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -44,11 +43,11 @@ public class PNGDataFormat extends ImageDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<DataFormatInfo,Exception> getInfo(final Data data, final byte priority) {
-		AsyncWork<DataFormatInfo,Exception> sp = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
+	public AsyncSupplier<DataFormatInfo,Exception> getInfo(final Data data, final Priority priority) {
+		AsyncSupplier<DataFormatInfo,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<? extends IO.Readable.Seekable, IOException> open = data.openReadOnly(priority);
 		ByteBuffer buf = ByteBuffer.allocate(4+4+13);
-		open.listenInline(new Runnable() {
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (open.isCancelled()) return;
@@ -58,16 +57,13 @@ public class PNGDataFormat extends ImageDataFormat {
 				}
 				@SuppressWarnings("resource")
 				IO.Readable.Seekable io = open.getResult();
-				AsyncWork<Integer, IOException> read = io.readFullyAsync(8,buf);
-				sp.onCancel(new Listener<CancelException>() {
-					@Override
-					public void fire(CancelException event) {
-						read.unblockCancel(event);
-						if (read.isCancelled())
-							io.closeAsync();
-					}
+				AsyncSupplier<Integer, IOException> read = io.readFullyAsync(8,buf);
+				sp.onCancel(event -> {
+					read.unblockCancel(event);
+					if (read.isCancelled())
+						io.closeAsync();
 				});
-				read.listenInline(new Runnable() {
+				read.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (read.isCancelled()) return;
@@ -76,47 +72,39 @@ public class PNGDataFormat extends ImageDataFormat {
 							sp.unblockError(read.getError());
 							return;
 						}
-						Task<Void,NoException> task = new Task.Cpu<Void,NoException>("Reading PNG metadata", priority) {
-							@Override
-							public Void run() {
-								try {
-									buf.flip();
-									int len = buf.getInt();
-									if (len < 8) {
-										sp.unblockSuccess(null);
-										return null;
-									}
-									int type = buf.getInt();
-									if (type != (('I'<<24) | ('H'<<16) | ('D'<<8) | ('R'))) {
-										sp.unblockSuccess(null);
-										return null;
-									}
-									PNGDataFormatInfo info = new PNGDataFormatInfo();
-									info.width = buf.getInt();
-									info.height = buf.getInt();
-									// continue: http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html#C.IHDR
-									sp.unblockSuccess(info);
+						Task<Void,NoException> task = Task.cpu("Reading PNG metadata", priority, t -> {
+							try {
+								buf.flip();
+								int len = buf.getInt();
+								if (len < 8) {
+									sp.unblockSuccess(null);
 									return null;
-								} catch (Exception e) {
-									sp.unblockError(e);
-									LCCore.getApplication().getDefaultLogger().error("Error reading PNG", e);
-									return null;
-								} finally {
-									io.closeAsync();
 								}
+								int type = buf.getInt();
+								if (type != (('I'<<24) | ('H'<<16) | ('D'<<8) | ('R'))) {
+									sp.unblockSuccess(null);
+									return null;
+								}
+								PNGDataFormatInfo info = new PNGDataFormatInfo();
+								info.width = buf.getInt();
+								info.height = buf.getInt();
+								// continue: http://www.libpng.org/pub/png/spec/1.2/PNG-Chunks.html#C.IHDR
+								sp.unblockSuccess(info);
+								return null;
+							} catch (Exception e) {
+								sp.unblockError(e);
+								LCCore.getApplication().getDefaultLogger().error("Error reading PNG", e);
+								return null;
+							} finally {
+								io.closeAsync();
 							}
-						};
+						});
 						task.start();
 					}
 				});
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				open.unblockCancel(event);
-			}
-		});
+		sp.onCancel(open::cancel);
 		return sp;
 	}
 	

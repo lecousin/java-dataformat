@@ -8,8 +8,8 @@ import java.util.Collections;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.progress.WorkProgress;
@@ -26,10 +26,10 @@ public class COFFArchive {
 		public long offset;
 	}
 	
-	private SynchronizationPoint<IOException> contentReady = null;
+	private Async<IOException> contentReady = null;
 	private ArrayList<COFFFile> content = new ArrayList<>();
 	
-	public SynchronizationPoint<IOException> contentReady() {
+	public Async<IOException> contentReady() {
 		return contentReady;
 	}
 	
@@ -45,9 +45,9 @@ public class COFFArchive {
 	 * @param list optional
 	 */
 	public void scanContent(IO.Readable io, AsyncCollection<COFFFile> list, WorkProgress progress, long work) {
-		contentReady = new SynchronizationPoint<>();
+		contentReady = new Async<>();
 		if (list != null)
-			contentReady.listenInline(new Runnable() {
+			contentReady.onDone(new Runnable() {
 				@Override
 				public void run() {
 					list.done();
@@ -56,7 +56,7 @@ public class COFFArchive {
 		// check header
 		ByteBuffer buf = ByteBuffer.allocate(60);
 		buf.limit(8);
-		io.readFullyAsync(buf).listenInline(new AsyncWorkListener<Integer, IOException>() {
+		io.readFullyAsync(buf).listen(new Listener<Integer, IOException>() {
 			@Override
 			public void ready(Integer nbRead) {
 				if (nbRead.intValue() != 8) {
@@ -89,7 +89,7 @@ public class COFFArchive {
 	}
 	private void readEntry(IO.Readable io, ByteBuffer buf, long pos, AsyncCollection<COFFFile> list, WorkProgress progress, long work) {
 		buf.clear();
-		io.readFullyAsync(buf).listenInline(new AsyncWorkListener<Integer, IOException>() {
+		io.readFullyAsync(buf).listen(new Listener<Integer, IOException>() {
 			@Override
 			public void ready(Integer nbRead) {
 				if (nbRead.intValue() <= 0) {
@@ -110,7 +110,7 @@ public class COFFArchive {
 					list.newElements(Collections.singletonList(file));
 				long s = file.size + (file.size%2);
 				if (progress != null) progress.progress(work/10);
-				io.skipAsync(s).listenInline(new AsyncWorkListener<Long, IOException>() {
+				io.skipAsync(s).listen(new Listener<Long, IOException>() {
 					@Override
 					public void ready(Long r) {
 						readEntry(io, buf, pos+60+s, list, progress, work-work/10);

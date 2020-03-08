@@ -2,21 +2,22 @@ package net.lecousin.dataformat.filesystem.fat;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
-public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seekable, IO.KnownSize {
+public class FatEntryIO extends ConcurrentCloseable<IOException> implements IO.Readable.Seekable, IO.KnownSize {
 
-	public FatEntryIO(FAT fat, FatEntry entry, byte priority) {
+	public FatEntryIO(FAT fat, FatEntry entry, Priority priority) {
 		this.fat = fat;
 		this.entry = entry;
 		this.priority = priority;
@@ -31,7 +32,7 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	protected FAT fat;
 	protected FatEntry entry;
 	protected long pos = 0;
-	protected byte priority;
+	protected Priority priority;
 	protected long clusterSize;
 	protected Long[] clusters;
 	
@@ -58,25 +59,25 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 		}
 	}
 	
-	private AsyncWork<Long, IOException> getClusterAsync(int num) {
+	private AsyncSupplier<Long, IOException> getClusterAsync(int num) {
 		byte[] buffer = new byte[4];
 		return getClusterAsync(num, buffer);
 	}
 
-	private AsyncWork<Long, IOException> getClusterAsync(int num, byte[] buffer) {
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
+	private AsyncSupplier<Long, IOException> getClusterAsync(int num, byte[] buffer) {
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
 		if (clusters[num - 1] != null)
-			fat.getNextCluster(clusters[num - 1].longValue(), buffer).listenInline((res) -> { clusters[num] = res; result.unblockSuccess(res); }, result);
+			fat.getNextCluster(clusters[num - 1].longValue(), buffer).onDone((res) -> { clusters[num] = res; result.unblockSuccess(res); }, result);
 		else
-			getClusterAsync(num - 1, buffer).listenInline((res) -> {
-				fat.getNextCluster(res.longValue(), buffer).listenInline((res2) -> { clusters[num] = res2; result.unblockSuccess(res2); }, result);
+			getClusterAsync(num - 1, buffer).onDone((res) -> {
+				fat.getNextCluster(res.longValue(), buffer).onDone((res2) -> { clusters[num] = res2; result.unblockSuccess(res2); }, result);
 			}, result);
 		return result;
 	}
 	
 	@Override
-	public ISynchronizationPoint<IOException> canStartReading() {
-		return new SynchronizationPoint<>(true);
+	public IAsync<IOException> canStartReading() {
+		return new Async<>(true);
 	}
 	
 	@Override
@@ -90,11 +91,11 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	public byte getPriority() {
+	public Priority getPriority() {
 		return priority;
 	}
 	@Override
-	public void setPriority(byte priority) {
+	public void setPriority(Priority priority) {
 		this.priority = priority;
 	}
 
@@ -104,12 +105,12 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	protected ISynchronizationPoint<?> closeUnderlyingResources() {
-		return new SynchronizationPoint<>(true);
+	protected IAsync<IOException> closeUnderlyingResources() {
+		return new Async<>(true);
 	}
 
 	@Override
-	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+	protected void closeResources(Async<IOException> ondone) {
 		ondone.unblock();
 	}
 
@@ -154,19 +155,19 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return readAsync(pos, buffer, ondone);
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		if (pos >= entry.size) {
-			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
-			return new AsyncWork<>(Integer.valueOf(-1), null);
+			if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
+			return new AsyncSupplier<>(Integer.valueOf(-1), null);
 		}
 		int clusterNum = (int)(pos / clusterSize);
 		long clusterOff = pos % clusterSize;
-		AsyncWork<Integer, IOException> result = new AsyncWork<>();
+		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		if (clusters[clusterNum] != null)
 			readAsync(clusters[clusterNum].longValue(), clusterOff, pos, buffer, ondone, result);
 		else
@@ -174,7 +175,7 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 		return result;
 	}
 	
-	private void readAsync(long cluster, long clusterOff, long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone, AsyncWork<Integer, IOException> result) {
+	private void readAsync(long cluster, long clusterOff, long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone, AsyncSupplier<Integer, IOException> result) {
 		long clusterAddr = fat.dataRegionAddress + (cluster - 2) * clusterSize;
 		int len = buffer.remaining();
 		if (pos + len > entry.size) len = (int)(entry.size - pos);
@@ -191,18 +192,18 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 				buffer.limit(limit);
 			if (nb > 0)
 				this.pos = pos + nb;
-			if (ondone != null) ondone.run(new Pair<>(nb, null));
+			if (ondone != null) ondone.accept(new Pair<>(nb, null));
 			result.unblockSuccess(nb);
 		}, result, ondone);
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return IOUtil.readFullyAsync(this, buffer, ondone);
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return IOUtil.readFullyAsync(this, pos, buffer, ondone);
 	}
 
@@ -216,7 +217,7 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
+	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
 		return IOUtil.skipAsyncUsingSync(this, n, ondone);
 	}
 
@@ -233,8 +234,8 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> seekAsync(SeekType type, long move, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		return IOUtil.seekAsyncUsingSync(this, type, move, ondone).getOutput();
+	public AsyncSupplier<Long, IOException> seekAsync(SeekType type, long move, Consumer<Pair<Long, IOException>> ondone) {
+		return IOUtil.seekAsyncUsingSync(this, type, move, ondone);
 	}
 
 	@Override
@@ -248,8 +249,8 @@ public class FatEntryIO extends ConcurrentCloseable implements IO.Readable.Seeka
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> getSizeAsync() {
-		return new AsyncWork<>(Long.valueOf(entry.size), null);
+	public AsyncSupplier<Long, IOException> getSizeAsync() {
+		return new AsyncSupplier<>(Long.valueOf(entry.size), null);
 	}
 	
 }

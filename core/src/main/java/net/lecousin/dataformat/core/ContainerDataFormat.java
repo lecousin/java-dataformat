@@ -9,7 +9,7 @@ import net.lecousin.dataformat.core.actions.RemoveDataAction;
 import net.lecousin.dataformat.core.actions.RenameDataAction;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.collections.LinkedArrayList;
-import net.lecousin.framework.concurrent.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.FakeWorkProgress;
 import net.lecousin.framework.progress.WorkProgress;
@@ -74,7 +74,7 @@ public interface ContainerDataFormat extends DataFormat {
 			synchronized (container) {
 				cache = (CachedObject<CollectionListener.Keep<Data>>)container.useCachedData(CACHE_KEY, listener);
 				if (cache == null) {
-					subData = new CollectionListener.Keep<Data>(new LinkedArrayList<Data>(10), Task.PRIORITY_NORMAL);
+					subData = new CollectionListener.Keep<Data>(new LinkedArrayList<Data>(10), Priority.NORMAL);
 					CollectionListener.Keep<Data> sd = subData;
 					cache = new CachedObject<CollectionListener.Keep<Data>>(subData, interf.getCacheTimeout()) {
 						@Override

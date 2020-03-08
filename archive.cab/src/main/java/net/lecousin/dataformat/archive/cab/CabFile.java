@@ -6,9 +6,11 @@ import java.util.Calendar;
 import java.util.List;
 
 import net.lecousin.compression.mszip.MSZipReadable;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.SubIO;
@@ -26,7 +28,7 @@ public class CabFile {
 		return cab;
 	}
 
-	public SynchronizationPoint<IOException> onLoaded() {
+	public Async<IOException> onLoaded() {
 		return loaded;
 	}
 	
@@ -50,7 +52,7 @@ public class CabFile {
 		private int blocks;
 		private int compression;
 		private CachedObject<IO.Readable.Seekable> io = null;
-		private SynchronizationPoint<NoException> open = null;
+		private Async<NoException> open = null;
 	}
 	public static class File {
 		private long uncompressedSize;
@@ -82,11 +84,10 @@ public class CabFile {
 		public boolean isNameEncodedInUTF() { return (attributes & 0x100) != 0; }
 	}
 	
-	private SynchronizationPoint<IOException> loaded = new SynchronizationPoint<>();
+	private Async<IOException> loaded = new Async<>();
 	private ArrayList<Folder> folders;
 	private ArrayList<File> files;
 	
-	@SuppressWarnings("resource")
 	private void load(WorkProgress progress, long work) {
 		// list of files is at the beginning of the file, we should have a buffered readable, but with small pre-buffered size
 		IO.Readable.Buffered bio;
@@ -94,12 +95,11 @@ public class CabFile {
 			bio = (IO.Readable.Buffered)io;
 		else
 			bio = new SimpleBufferedReadable(io, 512);
-		bio.canStartReading().listenAsync(new Load(bio, progress, work), true);
+		bio.canStartReading().thenStart("Load CAB file content", io.getPriority(), new Load(bio, progress, work), true);
 	}
 	
-	private class Load extends Task.Cpu<Void, NoException> {
+	private class Load implements Executable<Void, NoException> {
 		public Load(IO.Readable.Buffered io, WorkProgress progress, long work) {
-			super("Load CAB file content", io.getPriority());
 			this.io = io;
 			this.progress = progress;
 			this.work = work;
@@ -108,14 +108,14 @@ public class CabFile {
 		private WorkProgress progress;
 		private long work;
 		@Override
-		public Void run() {
+		public Void execute(Task<Void, NoException> taskContext) {
 			try {
 				io.skip(16);
-				long first_cffile_entry = DataUtil.readUnsignedIntegerLittleEndian(io);
+				long first_cffile_entry = DataUtil.Read32U.LE.read(io);
 				io.skip(6);
-				int nb_cffolders = DataUtil.readUnsignedShortLittleEndian(io);
-				int nb_cffiles = DataUtil.readUnsignedShortLittleEndian(io);
-				int flags = DataUtil.readUnsignedShortLittleEndian(io);
+				int nb_cffolders = DataUtil.Read16U.LE.read(io);
+				int nb_cffiles = DataUtil.Read16U.LE.read(io);
+				int flags = DataUtil.Read16U.LE.read(io);
 				//int set_id = IOUtil.readUnsignedShortIntel(tmp, 16);
 				//int iCabinet = IOUtil.readUnsignedShortIntel(tmp, 18);
 				io.skip(4);
@@ -123,7 +123,7 @@ public class CabFile {
 				long start = 36;
 				int per_folder_reserved_area_size = 0;
 				if ((flags & 4) != 0) {
-					int per_cabinet_reserved_area_size = DataUtil.readUnsignedShortLittleEndian(io);
+					int per_cabinet_reserved_area_size = DataUtil.Read16U.LE.read(io);
 					per_folder_reserved_area_size = io.read();
 					per_datablock_reserved_area_size = io.read();
 					start += 4;
@@ -147,9 +147,9 @@ public class CabFile {
 				folders = new ArrayList<>(nb_cffolders);
 				for (int i = 0; i < nb_cffolders; ++i) {
 					Folder f = new Folder();
-					f.offset = DataUtil.readUnsignedIntegerLittleEndian(io);
-					f.blocks = DataUtil.readUnsignedShortLittleEndian(io);
-					f.compression = DataUtil.readUnsignedShortLittleEndian(io);
+					f.offset = DataUtil.Read32U.LE.read(io);
+					f.blocks = DataUtil.Read16U.LE.read(io);
+					f.compression = DataUtil.Read16U.LE.read(io);
 					f.compression &= 0xF;
 					folders.add(f);
 					io.skip(per_folder_reserved_area_size);
@@ -165,12 +165,12 @@ public class CabFile {
 					long step = work/nb--;
 					work -= step;
 					File f = new File();
-					f.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(io);
-					f.uncompressedOffset = DataUtil.readUnsignedIntegerLittleEndian(io);
-					f.folderIndex = DataUtil.readUnsignedShortLittleEndian(io);
-					f.date = DataUtil.readUnsignedShortLittleEndian(io);
-					f.time = DataUtil.readUnsignedShortLittleEndian(io);
-					f.attributes = DataUtil.readUnsignedShortLittleEndian(io);
+					f.uncompressedSize = DataUtil.Read32U.LE.read(io);
+					f.uncompressedOffset = DataUtil.Read32U.LE.read(io);
+					f.folderIndex = DataUtil.Read16U.LE.read(io);
+					f.date = DataUtil.Read16U.LE.read(io);
+					f.time = DataUtil.Read16U.LE.read(io);
+					f.attributes = DataUtil.Read16U.LE.read(io);
 					f.name = readNulString(io);
 					files.add(f);
 					if (progress != null) progress.progress(step);
@@ -194,78 +194,74 @@ public class CabFile {
 		return s.toString();
 	}
 	
-	public AsyncWork<IO.Readable, IOException> openFile(File file, byte priority) {
-		AsyncWork<IO.Readable, IOException> result = new AsyncWork<>();
-		new Task.Cpu<Void, NoException>("Open CAB inner file", priority) {
-			@SuppressWarnings("resource")
-			@Override
-			public Void run() {
-				Object folderUser = new Object();
-				Folder folder = folders.get(file.folderIndex);
-				SynchronizationPoint<NoException> sp = null;
-				synchronized (folder) {
-					if (folder.io == null) {
-						if (folder.open != null)
-							sp = folder.open;
-						else
-							folder.open = new SynchronizationPoint<>();
-					}
+	public AsyncSupplier<IO.Readable, IOException> openFile(File file, Priority priority) {
+		AsyncSupplier<IO.Readable, IOException> result = new AsyncSupplier<>();
+		Task.cpu("Open CAB inner file", priority, t -> {
+			Object folderUser = new Object();
+			Folder folder = folders.get(file.folderIndex);
+			Async<NoException> sp = null;
+			synchronized (folder) {
+				if (folder.io == null) {
+					if (folder.open != null)
+						sp = folder.open;
+					else
+						folder.open = new Async<>();
 				}
-				Runnable onFolderOpen = new Runnable() {
-					@Override
-					public void run() {
-						SubIO.Readable.Seekable io = new SubIO.Readable.Seekable(folder.io.get(), file.uncompressedOffset, file.uncompressedSize, file.name, false);
-						io.addCloseListener(new Runnable() {
-							@Override
-							public void run() {
-								folder.io.release(folderUser);
-							}
-						});
-						result.unblockSuccess(io);
-					}
-				};
-				if (folder.io != null) {
-					onFolderOpen.run();
-					return null;
+			}
+			Runnable onFolderOpen = new Runnable() {
+				@Override
+				public void run() {
+					SubIO.Readable.Seekable io = new SubIO.Readable.Seekable(folder.io.get(), file.uncompressedOffset, file.uncompressedSize, file.name, false);
+					io.addCloseListener(new Runnable() {
+						@Override
+						public void run() {
+							folder.io.release(folderUser);
+						}
+					});
+					result.unblockSuccess(io);
 				}
-				if (sp != null) {
-					sp.listenInline(onFolderOpen);
-					return null;
-				}
-				CabFolderIO.Readable fio = new CabFolderIO.Readable((IO.Readable.Seekable)io, folder.offset, folder.blocks, per_datablock_reserved_area_size);
-				IO.Readable.Seekable folderIO;
-				switch (folder.compression) {
-				case 0: // no compression
-					folderIO = fio;
-					break;
-				case 1: // MSZIP
-					try { folderIO = new ReadableToSeekable(new MSZipReadable(fio, priority), 32768); }
-					catch (IOException e) {
-						result.error(e);
-						return null;
-					}
-					break;
-				case 2: // QUANTUM
-					// TODO
-				case 3: // LZX
-					// TODO
-				default:
-					fio.closeAsync();
-					result.error(new IOException("Unsupported CAB compression " + folder.compression));
-					return null;
-				}
-				folder.io = new CachedObject<IO.Readable.Seekable>(folderIO, 30 * 1000) {
-					@Override
-					protected void closeCachedObject(IO.Readable.Seekable io) {
-						io.closeAsync();
-					}
-				};
-				folder.io.use(folderUser);
+			};
+			if (folder.io != null) {
 				onFolderOpen.run();
-				folder.open.unblock();
 				return null;
 			}
-		}.start();
+			if (sp != null) {
+				sp.onDone(onFolderOpen);
+				return null;
+			}
+			CabFolderIO.Readable fio = new CabFolderIO.Readable((IO.Readable.Seekable)io, folder.offset, folder.blocks, per_datablock_reserved_area_size);
+			IO.Readable.Seekable folderIO;
+			switch (folder.compression) {
+			case 0: // no compression
+				folderIO = fio;
+				break;
+			case 1: // MSZIP
+				try { folderIO = new ReadableToSeekable(new MSZipReadable(fio, priority), 32768); }
+				catch (IOException e) {
+					result.error(e);
+					return null;
+				}
+				break;
+			case 2: // QUANTUM
+				// TODO
+			case 3: // LZX
+				// TODO
+			default:
+				fio.closeAsync();
+				result.error(new IOException("Unsupported CAB compression " + folder.compression));
+				return null;
+			}
+			folder.io = new CachedObject<IO.Readable.Seekable>(folderIO, 30 * 1000) {
+				@Override
+				protected void closeCachedObject(IO.Readable.Seekable io) {
+					io.closeAsync();
+				}
+			};
+			folder.io.use(folderUser);
+			onFolderOpen.run();
+			folder.open.unblock();
+			return null;
+		}).start();
 		return result;
 	}
 	

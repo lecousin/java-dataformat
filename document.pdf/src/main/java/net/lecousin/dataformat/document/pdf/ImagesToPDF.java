@@ -2,10 +2,20 @@ package net.lecousin.dataformat.document.pdf;
 
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.function.Supplier;
+
+import org.apache.pdfbox.io.MemoryUsageSetting;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
+import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 import net.lecousin.dataformat.core.operations.Operation;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -15,14 +25,6 @@ import net.lecousin.framework.mutable.MutableLong;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.Provider;
-
-import org.apache.pdfbox.io.MemoryUsageSetting;
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory;
-import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 
 public class ImagesToPDF implements Operation.ManyToOne<BufferedImage, PDDocument, ImagesToPDF.Parameters> {
 
@@ -67,11 +69,11 @@ public class ImagesToPDF implements Operation.ManyToOne<BufferedImage, PDDocumen
 	}
 
 	@Override
-	public AsyncWork<Pair<PDDocument, Object>, Exception> startOperation(
-			Provider<AsyncWork<BufferedImage, ? extends Exception>> inputProvider, int nbInputs, Parameters params,
-			byte priority, WorkProgress progress, long work) {
+	public AsyncSupplier<Pair<PDDocument, Object>, Exception> startOperation(
+			Supplier<AsyncSupplier<BufferedImage, ? extends Exception>> inputProvider, int nbInputs, Parameters params,
+			Priority priority, WorkProgress progress, long work) {
 		
-		AsyncWork<Pair<PDDocument, Object>, Exception> result = new AsyncWork<>();
+		AsyncSupplier<Pair<PDDocument, Object>, Exception> result = new AsyncSupplier<>();
 		Mutable<PDDocument> pdf = new Mutable<>(null);
 		MutableInteger nb = new MutableInteger(nbInputs);
 		MutableLong remainingWork = new MutableLong(work);
@@ -85,8 +87,8 @@ public class ImagesToPDF implements Operation.ManyToOne<BufferedImage, PDDocumen
 					result.unblockSuccess(new Pair<>(pdf.get(), null));
 					return;
 				}
-				AsyncWork<BufferedImage, ? extends Exception> nextInput = inputProvider.provide();
-				nextInput.listenInline(new Runnable() {
+				AsyncSupplier<BufferedImage, ? extends Exception> nextInput = inputProvider.get();
+				nextInput.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (nextInput.hasError()) { result.error(nextInput.getError()); return; }
@@ -97,13 +99,11 @@ public class ImagesToPDF implements Operation.ManyToOne<BufferedImage, PDDocumen
 							result.unblockSuccess(new Pair<>(pdf.get(), null));
 							return;
 						}
-						AddImageToPDF task = new AddImageToPDF(img, pdf.get(), priority);
+						Task<Void, IOException> task = Task.cpu("Add image to PDF", priority, new AddImageToPDF(img, pdf.get()));
 						task.start();
-						task.getOutput().listenInline(new Runnable() {
+						task.getOutput().onDone(new Runnable() {
 							@Override
 							public void run() {
-								if (task.hasError()) { result.error(task.getError()); return; }
-								if (task.isCancelled()) { result.cancel(task.getCancelEvent()); return; }
 								if (progress != null) {
 									if (nb.get() > 0) {
 										long step = remainingWork.get() / nb.get();
@@ -118,35 +118,30 @@ public class ImagesToPDF implements Operation.ManyToOne<BufferedImage, PDDocumen
 								}
 								_next.run();
 							}
-						});
+						}, result, e -> e);
 					}
 				});
 			}
 		};
 		
-		Task.Cpu<Void,NoException> startTask = new Task.Cpu<Void,NoException>("Initialize PDF to store images", priority) {
-			@SuppressWarnings("resource")
-			@Override
-			public Void run() {
-				pdf.set(new PDDocument(MemoryUsageSetting.setupMixed(16 * 1024 * 1024))); // max 16MB of memory
-				next.run();
-				return null;
-			}
-		};
+		Task<Void,NoException> startTask = Task.cpu("Initialize PDF to store images", priority, t -> {
+			pdf.set(new PDDocument(MemoryUsageSetting.setupMixed(16 * 1024 * 1024))); // max 16MB of memory
+			next.run();
+			return null;
+		});
 		startTask.start();
 		return result;
 	}
 	
-	public static class AddImageToPDF extends Task.Cpu<Void, IOException> {
-		public AddImageToPDF(BufferedImage image, PDDocument pdf, byte priority) {
-			super("Add image to PDF", priority);
+	public static class AddImageToPDF implements Executable<Void, IOException> {
+		public AddImageToPDF(BufferedImage image, PDDocument pdf) {
 			this.image = image;
 			this.pdf = pdf;
 		}
 		private BufferedImage image;
 		private PDDocument pdf;
 		@Override
-		public Void run() throws IOException {
+		public Void execute(Task<Void, IOException> taskContext) throws IOException {
 			PDPage page = new PDPage();
 			pdf.addPage(page);
 			PDImageXObject pdi = LosslessFactory.createFromImage(pdf, image);

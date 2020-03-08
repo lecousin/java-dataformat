@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.text.TextSpecializationDetectorWithFirstLines;
-import net.lecousin.framework.util.UnprotectedString;
+import net.lecousin.framework.text.CharArrayString;
 
 public class SecurityTextFormatPlugin implements TextSpecializationDetectorWithFirstLines.Plugin {
 	
@@ -17,8 +17,8 @@ public class SecurityTextFormatPlugin implements TextSpecializationDetectorWithF
 	}
 	
 	@Override
-	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars) {
-		UnprotectedString line = lines.get(0);
+	public DataFormat detect(Data data, ArrayList<CharArrayString> lines, char[] allHeaderChars, int nbHeaderChars) {
+		CharArrayString line = lines.get(0);
 		if (line.length() >= 15 &&
 			line.charAt(0) == '-' &&
 			line.charAt(1) == '-' &&

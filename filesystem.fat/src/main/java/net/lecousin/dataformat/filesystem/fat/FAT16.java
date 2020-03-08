@@ -3,10 +3,10 @@ package net.lecousin.dataformat.filesystem.fat;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
-import net.lecousin.framework.util.StringUtil;
+import net.lecousin.framework.text.StringUtil;
 
 public class FAT16 extends FAT1216 {
 
@@ -25,17 +25,17 @@ public class FAT16 extends FAT1216 {
 	}
 	
 	@Override
-	protected AsyncWork<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
+	protected AsyncSupplier<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
 		long pos = reservedSectors * bytesPerSector;
 		pos += cluster * 2;
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buffer, 0, 2));
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		read.listenInline((nb) -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buffer, 0, 2));
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		read.onDone((nb) -> {
 			if (nb != 2) {
 				result.error(new IOException("Unexpected end of FAT file system"));
 				return;
 			}
-			int v = DataUtil.readUnsignedShortLittleEndian(buffer, 0);
+			int v = DataUtil.Read16U.LE.read(buffer, 0);
 			if (v >= 0x002 && v <= 0xFFEF)
 				result.unblockSuccess(Long.valueOf(v));
 			else if (v >= 0xFFF8)

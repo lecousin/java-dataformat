@@ -4,7 +4,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import net.lecousin.dataformat.archive.rar.RarArchive.Format;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.progress.WorkProgress;
 
 abstract class RarLoader {
@@ -12,8 +12,8 @@ abstract class RarLoader {
 	static void load(RarArchive rar, WorkProgress progress, long work) {
 		byte[] buf = new byte[7];
 		ByteBuffer buffer = ByteBuffer.wrap(buf);
-		AsyncWork<Integer,IOException> readHeader = rar.io.readFullyAsync(0, buffer);
-		readHeader.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> readHeader = rar.io.readFullyAsync(0, buffer);
+		readHeader.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (readHeader.isCancelled()) {

@@ -19,5 +19,9 @@
   		<artifactId>image.ico</artifactId>
   		<version>${project.version}</version>
   	</dependency>
+    <dependency>
+      <groupId>net.lecousin.framework</groupId>
+      <artifactId>xml</artifactId>
+    </dependency>
   </dependencies>
 </project>

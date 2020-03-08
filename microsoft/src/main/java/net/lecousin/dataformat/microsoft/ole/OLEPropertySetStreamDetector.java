@@ -27,10 +27,10 @@ public class OLEPropertySetStreamDetector implements DataFormatDetector.OnlyHead
 		if (header[3] != 0) return null;
 		if (header[0x19] != 0) return null;
 		if (header[0x1A] != 0) return null;
-		int nbSets = DataUtil.readUnsignedShortLittleEndian(header, 0x18);
+		int nbSets = DataUtil.Read16U.LE.read(header, 0x18);
 		if (nbSets == 0) return null;
 		// check offset of first property set
-		long offset = DataUtil.readUnsignedIntegerLittleEndian(header, 0x2C);
+		long offset = DataUtil.Read32U.LE.read(header, 0x2C);
 		if (offset != 0x30 + (nbSets - 1)*20) return null;
 		return OLEPropertySetStream.instance;
 	}

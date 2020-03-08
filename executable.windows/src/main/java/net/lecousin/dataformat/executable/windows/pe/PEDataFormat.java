@@ -6,7 +6,8 @@ import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
 import net.lecousin.dataformat.executable.windows.coff.COFFDataFormat;
 import net.lecousin.dataformat.executable.windows.msdos.MZDataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -36,13 +37,13 @@ public class PEDataFormat extends MZDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		// TODO
 		return null;
 	}
 	
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
 		SubData coff = (SubData)container.getProperty("COFF");
 		if (coff == null) {
 			long peOffset = ((Long)container.getProperty("PEOffset")).longValue();
@@ -52,6 +53,6 @@ public class PEDataFormat extends MZDataFormat {
 			coff.setProperty("COFFOffset", new Long(peOffset+4));
 		}
 		progress.progress(work);
-		return new AsyncWork<>(coff, null);
+		return new AsyncSupplier<>(coff, null);
 	}
 }

@@ -5,7 +5,7 @@ import java.util.ArrayList;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.progress.WorkProgress;
@@ -30,7 +30,7 @@ public class RarArchive {
 	}
 	
 	IO.Readable.Seekable io;
-	SynchronizationPoint<IOException> contentLoaded = null;
+	Async<IOException> contentLoaded = null;
 	Format format = null;
 	ArrayList<RARFile> content = new ArrayList<>();
 	
@@ -55,10 +55,10 @@ public class RarArchive {
 		}
 	}
 	
-	public SynchronizationPoint<IOException> loadContent(WorkProgress progress, long work) {
+	public Async<IOException> loadContent(WorkProgress progress, long work) {
 		if (contentLoaded != null)
 			return contentLoaded;
-		contentLoaded = new SynchronizationPoint<>();
+		contentLoaded = new Async<>();
 		RarLoader.load(this, progress, work);
 		return contentLoaded;
 	}
@@ -68,7 +68,7 @@ public class RarArchive {
 	}
 	
 	public void close(boolean asynch) {
-		if (!contentLoaded.isUnblocked())
+		if (!contentLoaded.isDone())
 			contentLoaded.cancel(new CancelException("RarArchive closed"));
 		content = null;
 		if (asynch)

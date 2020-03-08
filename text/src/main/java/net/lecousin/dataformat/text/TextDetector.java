@@ -79,7 +79,7 @@ public class TextDetector implements DataFormatDetector.OnlyHeaderNeeded {
 	private static boolean isValidUTF16(byte[] data, int len, int pos, boolean littleEndian) {
 		int nb = (len - pos) / 2;
 		for (int i = 0; i < nb; ++i) {
-			int c = littleEndian ? DataUtil.readUnsignedShortLittleEndian(data, pos + i*2) : DataUtil.readUnsignedShortBigEndian(data, pos + i*2);
+			int c = littleEndian ? DataUtil.Read16U.LE.read(data, pos + i*2) : DataUtil.Read16U.BE.read(data, pos + i*2);
 			if (c >= 0xDC00 && c <= 0xDFFF)
 				return false;
 			if (c >= 0xD800 && c <= 0xDBFF) {
@@ -87,7 +87,7 @@ public class TextDetector implements DataFormatDetector.OnlyHeaderNeeded {
 				if (i == nb - 1)
 					return false;
 				i++;
-				c = littleEndian ? DataUtil.readUnsignedShortLittleEndian(data, pos + i*2) : DataUtil.readUnsignedShortBigEndian(data, pos + i*2);
+				c = littleEndian ? DataUtil.Read16U.LE.read(data, pos + i*2) : DataUtil.Read16U.BE.read(data, pos + i*2);
 				if (c <= 0xDC00 || c >= 0xDFFF)
 					return false;
 			}

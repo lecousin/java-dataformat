@@ -13,8 +13,9 @@ import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.dataformat.filesystem.ext.ExtFS.INode;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -55,10 +56,10 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<ExtFSDataFormatInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(data, this, priority, null, 0);
-		AsyncWork<ExtFSDataFormatInfo, Exception> result = new AsyncWork<>();
-		getCache.listenAsync(new Task.Cpu.FromRunnable("Get Ext File System information", priority, () -> {
+	public AsyncSupplier<ExtFSDataFormatInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<CachedObject<ExtFS>, Exception> getCache = cache.open(data, this, priority, null, 0);
+		AsyncSupplier<ExtFSDataFormatInfo, Exception> result = new AsyncSupplier<>();
+		getCache.thenStart("Get Ext File System information", priority, () -> {
 			ExtFS fs = getCache.getResult().get();
 			ExtFSDataFormatInfo info = new ExtFSDataFormatInfo();
 			info.blockSize = fs.blockSize;
@@ -67,7 +68,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 			info.inodeSize = fs.inodeSize;
 			info.uuid = fs.uuid;
 			result.unblockSuccess(info);
-		}), result);
+		}, result);
 		return result;
 	}
 
@@ -75,8 +76,8 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<ExtFS, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<ExtFS, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<ExtFS, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<ExtFS, Exception> result = new AsyncSupplier<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)
 				content = (IO.Readable.Seekable)io;
@@ -87,7 +88,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 					return result;
 				}
 			ExtFS fs = new ExtFS(content);
-			fs.open().listenInlineSP(() -> { result.unblockSuccess(fs); }, result);
+			fs.open().onDone(() -> { result.unblockSuccess(fs); }, result, e -> e);
 			return result;
 		}
 
@@ -107,22 +108,22 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading Ext File System");
-		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 800);
-		new Task.Cpu.FromRunnable("Get Ext File System root directory content", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<ExtFS>, Exception> getCache = cache.open(container, this, Priority.IMPORTANT, progress, 800);
+		Task.cpu("Get Ext File System root directory content", Priority.IMPORTANT, t -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());
 				progress.error(getCache.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error reading Ext file system", getCache.getError());
-				return;
+				return null;
 			}
 			if (getCache.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			ExtFS fs = getCache.getResult().get();
-			AsyncWork<List<ExtFSEntry>, IOException> entries = fs.getRoot().getEntries();
-			entries.listenInline(() -> {
+			AsyncSupplier<List<ExtFSEntry>, IOException> entries = fs.getRoot().getEntries();
+			entries.onDone(() -> {
 				List<Data> list = new ArrayList<>();
 				if (entries.hasError()) {
 					listener.error(entries.getError());
@@ -138,6 +139,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 				}
 				getCache.getResult().release(ExtFSDataFormat.this);
 			});
+			return null;
 		}).startOn(getCache, true);
 		return progress;
 	}
@@ -155,23 +157,23 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 		}
 		
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading Ext File System");
-		AsyncWork<CachedObject<ExtFS>, Exception> getCache = cache.open(fsData, this, Task.PRIORITY_IMPORTANT, progress, 500);
-		new Task.Cpu.FromRunnable("Get Ext File System directory content", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<ExtFS>, Exception> getCache = cache.open(fsData, this, Priority.IMPORTANT, progress, 500);
+		Task.cpu("Get Ext File System directory content", Priority.IMPORTANT, t -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());
 				progress.error(getCache.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error reading Ext file system", getCache.getError());
-				return;
+				return null;
 			}
 			if (getCache.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			ExtFS fs = getCache.getResult().get();
 			if (fs != container.entry.getFS()) {
 				// new instance of ExtFS, we need to get a new instance of the directory
-				fs.loadDirectory(path).listenInline(
+				fs.loadDirectory(path).onDone(
 					(dir) -> {
 						loadDirectoryEntries(dir, getCache.getResult(), container, listener, progress);
 					},
@@ -186,16 +188,17 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 						getCache.getResult().release(ExtFSDataFormat.this);
 					}
 				);
-				return;
+				return null;
 			}
 			loadDirectoryEntries((ExtDirectory)container.entry, getCache.getResult(), container, listener, progress);
+			return null;
 		}).startOn(getCache, true);
 		return progress;
 	}
 	
 	private void loadDirectoryEntries(ExtDirectory dir, CachedObject<ExtFS> cache, Data container, CollectionListener<Data> listener, WorkProgress progress) {
-		AsyncWork<List<ExtFSEntry>, IOException> entries = dir.getEntries();
-		entries.listenInline(() -> {
+		AsyncSupplier<List<ExtFSEntry>, IOException> entries = dir.getEntries();
+		entries.onDone(() -> {
 			List<Data> list = new ArrayList<>();
 			if (entries.hasError()) {
 				listener.error(entries.getError());
@@ -221,7 +224,7 @@ public class ExtFSDataFormat implements ContainerDataFormat {
 	@Override
 	public DataCommonProperties getSubDataCommonProperties(Data subData) {
 		ExtFSData d = (ExtFSData)subData;
-		AsyncWork<INode, IOException> load = d.entry.loadINode();
+		AsyncSupplier<INode, IOException> load = d.entry.loadINode();
 		ExtFSEntryProperties p = new ExtFSEntryProperties();
 		p.size = BigInteger.valueOf(d.getSize());
 		load.block(0);

@@ -6,8 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.lecousin.framework.collections.AsyncCollection;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 
@@ -24,9 +23,9 @@ public abstract class FAT1216 extends FAT {
 	@Override
 	protected void loadFirstSector(byte[] sector) throws IOException {
 		super.loadFirstSector(sector);
-		maxNbRootEntries = DataUtil.readUnsignedShortLittleEndian(sector, 0x11);
-		sectorsPerFat = DataUtil.readUnsignedShortLittleEndian(sector, 0x16);
-		serialNumber = DataUtil.readUnsignedIntegerLittleEndian(sector, 0x27);
+		maxNbRootEntries = DataUtil.Read16U.LE.read(sector, 0x11);
+		sectorsPerFat = DataUtil.Read16U.LE.read(sector, 0x16);
+		serialNumber = DataUtil.Read32U.LE.read(sector, 0x27);
 		volumeLabel = new String(sector, 0x2B, 11).trim();
 		dataRegionAddress = (reservedSectors + nbFat * sectorsPerFat) * bytesPerSector;
 		dataRegionAddress += maxNbRootEntries * 32;
@@ -39,8 +38,8 @@ public abstract class FAT1216 extends FAT {
 	}
 	
 	private void listRootEntries(int index, long offset, FatEntryState state, byte[] buffer, AsyncCollection<FatEntry> listener) {
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(offset, ByteBuffer.wrap(buffer));
-		read.listenAsync(new Task.Cpu.FromRunnable("Read FAT root directory", io.getPriority(), () -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(offset, ByteBuffer.wrap(buffer));
+		read.thenStart("Read FAT root directory", io.getPriority(), () -> {
 			if (read.hasError()) {
 				listener.error(read.getError());
 				return;
@@ -69,7 +68,7 @@ public abstract class FAT1216 extends FAT {
 				listener.done();
 			else
 				listRootEntries(index + buffer.length / 32, offset + buffer.length, state, buffer, listener);
-		}), true);
+		}, true);
 	}
 
 }

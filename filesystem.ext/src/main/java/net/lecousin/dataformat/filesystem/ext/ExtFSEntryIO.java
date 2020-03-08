@@ -2,24 +2,24 @@ package net.lecousin.dataformat.filesystem.ext;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.function.Consumer;
 
 import net.lecousin.dataformat.filesystem.ext.ExtFS.INode;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
 
-public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.Seekable, IO.KnownSize {
+public class ExtFSEntryIO extends ConcurrentCloseable<IOException> implements IO.Readable.Seekable, IO.KnownSize {
 
-	static ExtFSEntryIO open(ExtFSEntry entry, byte priority) {
+	static ExtFSEntryIO open(ExtFSEntry entry, Priority priority) {
 		ExtFS fs = entry.getFS();
 		IO.Readable.Seekable io = fs.io;
 		//if (io instanceof IO.Writable.Seekable)
@@ -27,7 +27,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		return new ExtFSEntryIO(io, entry, fs, priority);
 	}
 	
-	private ExtFSEntryIO(IO.Readable.Seekable io, ExtFSEntry entry, ExtFS fs, byte priority) {
+	private ExtFSEntryIO(IO.Readable.Seekable io, ExtFSEntry entry, ExtFS fs, Priority priority) {
 		this.io = io;
 		this.fs = fs;
 		this.entry = entry;
@@ -39,11 +39,11 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	protected ExtFS fs;
 	protected ExtFSEntry entry;
 	protected long pos = 0;
-	protected byte priority;
-	protected AsyncWork<INode, IOException> loadINode;
+	protected Priority priority;
+	protected AsyncSupplier<INode, IOException> loadINode;
 	
 	@Override
-	public ISynchronizationPoint<IOException> canStartReading() {
+	public IAsync<IOException> canStartReading() {
 		return loadINode;
 	}
 
@@ -113,7 +113,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 				// 1 level
 				byte[] buf = new byte[4];
 				io.readFullySync(inode.blocks[12]*fs.blockSize+block*4, ByteBuffer.wrap(buf));
-				long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+				long val = DataUtil.Read32U.LE.read(buf, 0);
 				nb = io.readSync(val*fs.blockSize+blockOff, buffer);
 			} else {
 				block -= fs.blockSize/4;
@@ -123,9 +123,9 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 					int level2Off = (int)(block%(fs.blockSize/4));
 					byte[] buf = new byte[4];
 					io.readFullySync(inode.blocks[13]*fs.blockSize+level2*4, ByteBuffer.wrap(buf));
-					long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+					long val = DataUtil.Read32U.LE.read(buf, 0);
 					io.readFullySync(val*fs.blockSize+level2Off*4, ByteBuffer.wrap(buf));
-					val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+					val = DataUtil.Read32U.LE.read(buf, 0);
 					nb = io.readSync(val*fs.blockSize+blockOff, buffer);
 				} else {
 					block -= (fs.blockSize/4)*(fs.blockSize/4);
@@ -135,11 +135,11 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 					int level3Off = (int)(block%(fs.blockSize/4));
 					byte[] buf = new byte[4];
 					io.readFullySync(inode.blocks[14]*fs.blockSize+level2*4, ByteBuffer.wrap(buf));
-					long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+					long val = DataUtil.Read32U.LE.read(buf, 0);
 					io.readFullySync(val*fs.blockSize+level3*4, ByteBuffer.wrap(buf));
-					val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+					val = DataUtil.Read32U.LE.read(buf, 0);
 					io.readFullySync(val*fs.blockSize+level3Off*4, ByteBuffer.wrap(buf));
-					val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
+					val = DataUtil.Read32U.LE.read(buf, 0);
 					nb = io.readSync(val*fs.blockSize+blockOff, buffer);
 				}
 			}
@@ -156,15 +156,15 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		if (io.readFullySync(nodeBlock*fs.blockSize, ByteBuffer.wrap(tmp, 0, 8)) != 8) return -1;
 		if (tmp[0] != 0x0A || (tmp[1] & 0xFF) != 0xF3)
 			throw new IOException("Invalid ext4 extent node block: magic number missing in block "+nodeBlock);
-		int nbEntries = DataUtil.readUnsignedShortLittleEndian(tmp, 2);
-		int depth = DataUtil.readUnsignedShortLittleEndian(tmp, 6);
+		int nbEntries = DataUtil.Read16U.LE.read(tmp, 2);
+		int depth = DataUtil.Read16U.LE.read(tmp, 6);
 		if (depth == 0) {
 			for (int i = 0; i < nbEntries; ++i) {
 				if (io.readFullySync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp)) != 12) return -1;
-				long firstBlock = DataUtil.readUnsignedIntegerLittleEndian(tmp, 0);
-				int nbBlocks = DataUtil.readUnsignedShortLittleEndian(tmp, 4);
+				long firstBlock = DataUtil.Read32U.LE.read(tmp, 0);
+				int nbBlocks = DataUtil.Read16U.LE.read(tmp, 4);
 				if (block >= firstBlock && block < firstBlock+nbBlocks) {
-					long blockNum = DataUtil.readUnsignedIntegerLittleEndian(tmp, 8) + (DataUtil.readUnsignedShortLittleEndian(tmp, 6) << 32);
+					long blockNum = DataUtil.Read32U.LE.read(tmp, 8) + (DataUtil.Read16U.LE.read(tmp, 6) << 32);
 					long blockIndex = block-firstBlock;
 					long maxLen = (nbBlocks-blockIndex)*fs.blockSize-blockOff; 
 					int limit = -1;
@@ -186,8 +186,8 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		long lastNum = -1;
 		for (int i = 0; i < nbEntries; ++i) {
 			if (io.readFullySync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp, 0, 10)) != 10) return -1;
-			long firstBlock = DataUtil.readUnsignedIntegerLittleEndian(tmp, 0);
-			long blockNum = DataUtil.readUnsignedIntegerLittleEndian(tmp, 4) + DataUtil.readUnsignedShortLittleEndian(tmp, 8) << 32;
+			long firstBlock = DataUtil.Read32U.LE.read(tmp, 0);
+			long blockNum = DataUtil.Read32U.LE.read(tmp, 4) + DataUtil.Read16U.LE.read(tmp, 8) << 32;
 			if (lastBlock >= 0 && block >= lastBlock && block < firstBlock)
 				break;
 			lastBlock = firstBlock;
@@ -198,17 +198,17 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 	
 	@Override
-	public AsyncWork<Integer, IOException> readAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
-		AsyncWork<Integer, IOException> result = new AsyncWork<>();
+	public AsyncSupplier<Integer, IOException> readAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
+		AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 		readAsync(pos, buffer, result, ondone);
 		return result;
 	}
 	
-	private void readAsync(long pos, ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
-		if (!loadINode.isUnblocked()) {
-			loadINode.listenAsync(new Task.Cpu.FromRunnable("Read ExtFSEntry", getPriority(), () -> {
+	private void readAsync(long pos, ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer, IOException>> ondone) {
+		if (!loadINode.isDone()) {
+			loadINode.thenStart("Read ExtFSEntry", getPriority(), () -> {
 				readAsync(pos, buffer, result, ondone);
-			}), true);
+			}, true);
 			return;
 		}
 		if (!loadINode.isSuccessful()) {
@@ -246,13 +246,13 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 									buffer.limit(limit);
 								ExtFSEntryIO.this.pos = pos;
 								if (res.getValue1() != null && res.getValue1().intValue() > 0) ExtFSEntryIO.this.pos += res.getValue1().intValue();
-								if (ondone != null) ondone.run(res);
+								if (ondone != null) ondone.accept(res);
 								if (res.getValue1() != null) result.unblockSuccess(res.getValue1());
-							}).forwardCancel(result);
+							}).onCancel(result::cancel);
 							return;
 						}
 					}
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return;
 				}
@@ -268,7 +268,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 					lastNum = blockNum;
 				}
 				if (lastBlock == -1) {
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return;
 				}
@@ -282,26 +282,26 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 			buffer.limit(buffer.position() + (int)(fs.blockSize - blockOff));
 		} else
 			limit = -1;
-		RunnableWithParameter<Pair<Integer, IOException>> myOndone = (res) -> {
+		Consumer<Pair<Integer, IOException>> myOndone = (res) -> {
 			if (limit != -1)
 				buffer.limit(limit);
 			ExtFSEntryIO.this.pos = pos;
 			if (res.getValue1() != null && res.getValue1().intValue() > 0) ExtFSEntryIO.this.pos += res.getValue1().intValue();
-			if (ondone != null) ondone.run(res);
+			if (ondone != null) ondone.accept(res);
 			if (res.getValue1() != null) result.unblockSuccess(res.getValue1());
 		};
 		if (block < 12) {
-			io.readAsync(inode.blocks[(int)block]*fs.blockSize+blockOff, buffer, myOndone).forwardCancel(result);
+			io.readAsync(inode.blocks[(int)block]*fs.blockSize+blockOff, buffer, myOndone).onCancel(result::cancel);
 			return;
 		}
 		block -= 12;
 		if (block < fs.blockSize/4) {
 			// 1 level
 			byte[] buf = new byte[4];
-			io.readFullyAsync(inode.blocks[12]*fs.blockSize+block*4, ByteBuffer.wrap(buf)).listenInline(
+			io.readFullyAsync(inode.blocks[12]*fs.blockSize+block*4, ByteBuffer.wrap(buf)).onDone(
 				() -> {
-					long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-					io.readAsync(val*fs.blockSize+blockOff, buffer, myOndone).forwardCancel(result);
+					long val = DataUtil.Read32U.LE.read(buf, 0);
+					io.readAsync(val*fs.blockSize+blockOff, buffer, myOndone).onCancel(result::cancel);
 				},
 				result
 			);
@@ -313,13 +313,13 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 			int level2 = (int)(block/(fs.blockSize/4));
 			int level2Off = (int)(block%(fs.blockSize/4));
 			byte[] buf = new byte[4];
-			io.readFullyAsync(inode.blocks[13]*fs.blockSize+level2*4, ByteBuffer.wrap(buf)).listenInline(
+			io.readFullyAsync(inode.blocks[13]*fs.blockSize+level2*4, ByteBuffer.wrap(buf)).onDone(
 				() -> {
-					long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-					io.readFullyAsync(val*fs.blockSize+level2Off*4, ByteBuffer.wrap(buf)).listenInline(
+					long val = DataUtil.Read32U.LE.read(buf, 0);
+					io.readFullyAsync(val*fs.blockSize+level2Off*4, ByteBuffer.wrap(buf)).onDone(
 						() -> {
-							long val2 = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-							io.readAsync(val2*fs.blockSize+blockOff, buffer, myOndone).forwardCancel(result);
+							long val2 = DataUtil.Read32U.LE.read(buf, 0);
+							io.readAsync(val2*fs.blockSize+blockOff, buffer, myOndone).onCancel(result::cancel);
 						},
 						result
 					);
@@ -334,16 +334,16 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		int level3 = (int)(block%((fs.blockSize/4)*(fs.blockSize/4)));
 		int level3Off = (int)(block%(fs.blockSize/4));
 		byte[] buf = new byte[4];
-		io.readFullyAsync(inode.blocks[14]*fs.blockSize+level2*4, ByteBuffer.wrap(buf)).listenInline(
+		io.readFullyAsync(inode.blocks[14]*fs.blockSize+level2*4, ByteBuffer.wrap(buf)).onDone(
 			() -> {
-				long val = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-				io.readFullyAsync(val*fs.blockSize+level3*4, ByteBuffer.wrap(buf)).listenInline(
+				long val = DataUtil.Read32U.LE.read(buf, 0);
+				io.readFullyAsync(val*fs.blockSize+level3*4, ByteBuffer.wrap(buf)).onDone(
 					() -> {
-						long val2 = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-						io.readFullyAsync(val2*fs.blockSize+level3Off*4, ByteBuffer.wrap(buf)).listenInline(
+						long val2 = DataUtil.Read32U.LE.read(buf, 0);
+						io.readFullyAsync(val2*fs.blockSize+level3Off*4, ByteBuffer.wrap(buf)).onDone(
 							() -> {
-								long val3 = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-								io.readAsync(val3*fs.blockSize+blockOff, buffer, myOndone).forwardCancel(result);
+								long val3 = DataUtil.Read32U.LE.read(buf, 0);
+								io.readAsync(val3*fs.blockSize+blockOff, buffer, myOndone).onCancel(result::cancel);
 							},
 							result
 						);
@@ -355,23 +355,23 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		);
 	}
 
-	private void readFromExtentNodeAsync(long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	private void readFromExtentNodeAsync(long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer, IOException>> ondone) {
 		byte[] tmp = new byte[12];
-		io.readFullyAsync(nodeBlock*fs.blockSize, ByteBuffer.wrap(tmp, 0, 8)).listenInline(
+		io.readFullyAsync(nodeBlock*fs.blockSize, ByteBuffer.wrap(tmp, 0, 8)).onDone(
 			(nb) -> {
 				if (nb.intValue() != 8) {
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return;
 				}
 				if (tmp[0] != 0x0A || (tmp[1] & 0xFF) != 0xF3) {
 					IOException err = new IOException("Invalid ext4 extent node block: magic number missing in block "+nodeBlock);
-					if (ondone != null) ondone.run(new Pair<>(null, err));
+					if (ondone != null) ondone.accept(new Pair<>(null, err));
 					result.error(err);
 					return;
 				}
-				int nbEntries = DataUtil.readUnsignedShortLittleEndian(tmp, 2);
-				int depth = DataUtil.readUnsignedShortLittleEndian(tmp, 6);
+				int nbEntries = DataUtil.Read16U.LE.read(tmp, 2);
+				int depth = DataUtil.Read16U.LE.read(tmp, 6);
 				if (depth == 0)
 					readFromExtentNodeAsyncDepth0(0, nbEntries, tmp, nodeBlock, block, blockOff, pos, buffer, result, ondone);
 				readFromExtentNodeAsyncDepth(-1, -1, 0, nbEntries, tmp, nodeBlock, block, blockOff, pos, buffer, result, ondone);
@@ -380,23 +380,23 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		);
 	}
 
-	private void readFromExtentNodeAsyncDepth0(int i, int nbEntries, byte[] tmp, long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	private void readFromExtentNodeAsyncDepth0(int i, int nbEntries, byte[] tmp, long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer, IOException>> ondone) {
 		if (i == nbEntries) {
-			if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+			if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 			result.unblockSuccess(Integer.valueOf(-1));
 			return;
 		}
-		io.readFullyAsync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp)).listenInline(
+		io.readFullyAsync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp)).onDone(
 			(nb) -> {
 				if (nb.intValue() != 12) {
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return;
 				}
-				long firstBlock = DataUtil.readUnsignedIntegerLittleEndian(tmp, 0);
-				int nbBlocks = DataUtil.readUnsignedShortLittleEndian(tmp, 4);
+				long firstBlock = DataUtil.Read32U.LE.read(tmp, 0);
+				int nbBlocks = DataUtil.Read16U.LE.read(tmp, 4);
 				if (block >= firstBlock && block < firstBlock+nbBlocks) {
-					long blockNum = DataUtil.readUnsignedIntegerLittleEndian(tmp, 8) + (DataUtil.readUnsignedShortLittleEndian(tmp, 6) << 32);
+					long blockNum = DataUtil.Read32U.LE.read(tmp, 8) + (DataUtil.Read16U.LE.read(tmp, 6) << 32);
 					long blockIndex = block-firstBlock;
 					long maxLen = (nbBlocks-blockIndex)*fs.blockSize-blockOff; 
 					int limit;
@@ -410,9 +410,9 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 							buffer.limit(limit);
 						ExtFSEntryIO.this.pos = pos;
 						if (res.getValue1() != null && res.getValue1().intValue() > 0) ExtFSEntryIO.this.pos += res.getValue1().intValue();
-						if (ondone != null) ondone.run(res);
+						if (ondone != null) ondone.accept(res);
 						if (res.getValue1() != null) result.unblockSuccess(res.getValue1());
-					}).forwardCancel(result);
+					}).onCancel(result::cancel);
 					return;
 				}
 				readFromExtentNodeAsyncDepth0(i + 1, nbEntries, tmp, nodeBlock, block, blockOff, pos, buffer, result, ondone);
@@ -421,25 +421,25 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 		);
 	}
 	
-	private void readFromExtentNodeAsyncDepth(long lastBlock, long lastNum, int i, int nbEntries, byte[] tmp, long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncWork<Integer, IOException> result, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	private void readFromExtentNodeAsyncDepth(long lastBlock, long lastNum, int i, int nbEntries, byte[] tmp, long nodeBlock, long block, long blockOff, long pos, ByteBuffer buffer, AsyncSupplier<Integer, IOException> result, Consumer<Pair<Integer, IOException>> ondone) {
 		if (i == nbEntries) {
 			if (lastBlock == -1) {
-				if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+				if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 				result.unblockSuccess(Integer.valueOf(-1));
 			} else {
 				readFromExtentNodeAsync(lastNum, block, blockOff, pos, buffer, result, ondone);
 			}
 			return;
 		}
-		io.readFullyAsync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp, 0, 10)).listenInline(
+		io.readFullyAsync(nodeBlock*fs.blockSize+12+i*12, ByteBuffer.wrap(tmp, 0, 10)).onDone(
 			(nb) -> {
 				if (nb.intValue() != 10) {
-					if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
+					if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
 					result.unblockSuccess(Integer.valueOf(-1));
 					return;
 				}
-				long firstBlock = DataUtil.readUnsignedIntegerLittleEndian(tmp, 0);
-				long blockNum = DataUtil.readUnsignedIntegerLittleEndian(tmp, 4) + DataUtil.readUnsignedShortLittleEndian(tmp, 8) << 32;
+				long firstBlock = DataUtil.Read32U.LE.read(tmp, 0);
+				long blockNum = DataUtil.Read32U.LE.read(tmp, 4) + DataUtil.Read16U.LE.read(tmp, 8) << 32;
 				if (lastBlock >= 0 && block >= lastBlock && block < firstBlock) {
 					readFromExtentNodeAsync(lastNum, block, blockOff, pos, buffer, result, ondone);
 					return;
@@ -456,7 +456,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return readAsync(pos, buffer, ondone);
 	}
 
@@ -466,7 +466,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return readFullyAsync(pos, buffer, ondone);
 	}
 
@@ -481,9 +481,9 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		getSizeAsync().listenInline(
+	public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		getSizeAsync().onDone(
 			(size) -> {
 				long p = pos;
 				pos += n;
@@ -510,9 +510,9 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public AsyncWork<Long, IOException> seekAsync(SeekType type, long move, RunnableWithParameter<Pair<Long, IOException>> ondone) {
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		getSizeAsync().listenInline(
+	public AsyncSupplier<Long, IOException> seekAsync(SeekType type, long move, Consumer<Pair<Long, IOException>> ondone) {
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		getSizeAsync().onDone(
 			(size) -> {
 				switch (type) {
 				case FROM_BEGINNING: pos = move; break;
@@ -535,7 +535,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public AsyncWork<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+	public AsyncSupplier<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 		return IOUtil.readFullyAsync(this, pos, buffer, ondone);
 	}
 
@@ -551,9 +551,9 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 	
 	@Override
-	public AsyncWork<Long, IOException> getSizeAsync() {
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		if (loadINode.isUnblocked()) {
+	public AsyncSupplier<Long, IOException> getSizeAsync() {
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		if (loadINode.isDone()) {
 			if (!loadINode.isSuccessful()) {
 				if (loadINode.hasError()) result.error(loadINode.getError());
 				else result.cancel(loadINode.getCancelEvent());
@@ -561,7 +561,7 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 				result.unblockSuccess(Long.valueOf(loadINode.getResult().size));
 			return result;
 		}
-		loadINode.listenInline(() -> { result.unblockSuccess(Long.valueOf(loadINode.getResult().size)); }, result);
+		loadINode.onDone(() -> { result.unblockSuccess(Long.valueOf(loadINode.getResult().size)); }, result);
 		return result;
 	}
 
@@ -576,11 +576,11 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	public byte getPriority() {
+	public Priority getPriority() {
 		return priority;
 	}
 	@Override
-	public void setPriority(byte priority) {
+	public void setPriority(Priority priority) {
 		this.priority = priority;
 	}
 
@@ -590,13 +590,13 @@ public class ExtFSEntryIO extends ConcurrentCloseable implements IO.Readable.See
 	}
 
 	@Override
-	protected ISynchronizationPoint<?> closeUnderlyingResources() {
+	protected IAsync<IOException> closeUnderlyingResources() {
 		loadINode.cancel(new CancelException("ExtFS entry closed"));
-		return new SynchronizationPoint<>(true);
+		return new Async<>(true);
 	}
 
 	@Override
-	protected void closeResources(SynchronizationPoint<Exception> ondone) {
+	protected void closeResources(Async<IOException> ondone) {
 		ondone.unblock();
 	}
 

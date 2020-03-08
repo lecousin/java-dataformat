@@ -5,9 +5,9 @@ import java.io.IOException;
 import net.lecousin.dataformat.archive.zip.ZipArchive.ZippedFile;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -53,14 +53,14 @@ public class ZipFileData extends Data {
 	}
 	
 	@Override
-	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
-		AsyncWork<CachedObject<ZipArchive>,Exception> get = ZipDataFormat.cache.open(ZipFileData.this.zip, ZipFileData.this, priority, null, 0);
-		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
-		get.listenInline(new AsyncWorkListener<CachedObject<ZipArchive>, Exception>() {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
+		AsyncSupplier<CachedObject<ZipArchive>,Exception> get = ZipDataFormat.cache.open(ZipFileData.this.zip, ZipFileData.this, priority, null, 0);
+		AsyncSupplier<IO.Readable, IOException> sp = new AsyncSupplier<>();
+		get.listen(new Listener<CachedObject<ZipArchive>, Exception>() {
 			@Override
 			public void ready(CachedObject<ZipArchive> zip) {
-				AsyncWork<IO.Readable,IOException> uncompress = file.uncompress(zip.get(), priority);
-				uncompress.listenInline(new AsyncWorkListener<IO.Readable, IOException>() {
+				AsyncSupplier<IO.Readable,IOException> uncompress = file.uncompress(zip.get(), priority);
+				uncompress.listen(new Listener<IO.Readable, IOException>() {
 					@Override
 					public void ready(Readable result) {
 						result.addCloseListener(new Runnable() {
@@ -85,19 +85,14 @@ public class ZipFileData extends Data {
 			}
 			@Override
 			public void error(Exception error) {
-				sp.unblockError(error);
+				sp.unblockError(IO.error(error));
 			}
 			@Override
 			public void cancelled(CancelException event) {
 				sp.unblockCancel(event);
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				get.unblockCancel(event);
-			}
-		});
+		sp.onCancel(get::cancel);
 		return sp;
 	}
 	
@@ -107,7 +102,7 @@ public class ZipFileData extends Data {
 	}
 	
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 }

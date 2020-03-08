@@ -1,6 +1,6 @@
 package net.lecousin.dataformat.core;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 
@@ -24,7 +24,7 @@ public interface DataFormatDetector {
 	
 	public static interface MoreThanHeaderNeeded extends DataFormatDetector {
 
-		public abstract AsyncWork<DataFormat,NoException> finishDetection(Data data, byte[] header, int headerLength, IO.Readable.Seekable io, long dataSize);
+		public abstract AsyncSupplier<DataFormat,NoException> finishDetection(Data data, byte[] header, int headerLength, IO.Readable.Seekable io, long dataSize);
 		
 	}
 	

@@ -2,14 +2,16 @@ package net.lecousin.dataformat.document.pdf;
 
 import java.io.InputStream;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDDocumentInformation;
+
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsInputStream;
 import net.lecousin.framework.io.util.ReadableWithProgress;
@@ -18,9 +20,6 @@ import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDDocumentInformation;
 
 public class PDFDataFormat implements DataFormat {
 
@@ -51,14 +50,14 @@ public class PDFDataFormat implements DataFormat {
 	public static OpenedDataCache<PDDocument> cache = new OpenedDataCache<PDDocument>(PDDocument.class, 30*6000) {
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<PDDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<PDDocument,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			InputStream is = IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work), true);
 			PDDocument pdf;
 			try { pdf = PDDocument.load(is); }
 			catch (Exception e) {
-				return new AsyncWork<>(null, e);
+				return new AsyncSupplier<>(null, e);
 			}
-			return new AsyncWork<>(pdf, null);
+			return new AsyncSupplier<>(pdf, null);
 		}
 
 		@Override
@@ -75,39 +74,30 @@ public class PDFDataFormat implements DataFormat {
 	};
 	
 	@Override
-	public AsyncWork<DataFormatInfo,Exception> getInfo(Data data, byte priority) {
-		AsyncWork<CachedObject<PDDocument>,Exception> pdf = cache.open(data, this, priority, null, 0);
-		Task<DataFormatInfo,Exception> task = new Task.Cpu<DataFormatInfo,Exception>("Read PDF document info", priority) {
-			@SuppressWarnings("resource")
-			@Override
-			public DataFormatInfo run() {
-				try {
-					PDDocument doc = pdf.getResult().get();
-					if (doc == null) return null;
-					PDFInfo info = new PDFInfo();
-					info.pages = doc.getNumberOfPages();
-					info.encrypted = doc.isEncrypted();
-					PDDocumentInformation docInfo = doc.getDocumentInformation();
-					if (docInfo != null) {
-						info.title = docInfo.getTitle();
-						info.author = docInfo.getAuthor();
-						info.subject = docInfo.getSubject();
-						info.creator = docInfo.getCreator();
-						info.producer = docInfo.getProducer();
-					}
-					return info;
-				} finally {
-					pdf.getResult().release(PDFDataFormat.this);
+	public AsyncSupplier<DataFormatInfo,Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<CachedObject<PDDocument>,Exception> pdf = cache.open(data, this, priority, null, 0);
+		Task<DataFormatInfo,Exception> task = Task.cpu("Read PDF document info", priority, t -> {
+			try {
+				PDDocument doc = pdf.getResult().get();
+				if (doc == null) return null;
+				PDFInfo info = new PDFInfo();
+				info.pages = doc.getNumberOfPages();
+				info.encrypted = doc.isEncrypted();
+				PDDocumentInformation docInfo = doc.getDocumentInformation();
+				if (docInfo != null) {
+					info.title = docInfo.getTitle();
+					info.author = docInfo.getAuthor();
+					info.subject = docInfo.getSubject();
+					info.creator = docInfo.getCreator();
+					info.producer = docInfo.getProducer();
 				}
-			}
-		};
-		task.startOn(pdf, false);
-		task.getOutput().onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				pdf.unblockCancel(event);
+				return info;
+			} finally {
+				pdf.getResult().release(PDFDataFormat.this);
 			}
 		});
+		task.startOn(pdf, false);
+		task.getOutput().onCancel(pdf::cancel);
 		return task.getOutput();
 	}
 	

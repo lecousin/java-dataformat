@@ -4,7 +4,8 @@ import java.util.List;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.util.Pair;
@@ -20,11 +21,11 @@ public interface DataToDataOperation<Output extends DataFormat, TParameters> ext
 	public List<Class<? extends DataFormat>> getAcceptedInputs();
 	
 	public static interface OneToOne<Output extends DataFormat, TParameters> extends DataToDataOperation<Output, TParameters>, IOperation.OneToOne {
-		public AsyncWork<Void,? extends Exception> execute(Data input, Pair<Data,IO.Writable> output, TParameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Void,? extends Exception> execute(Data input, Pair<Data,IO.Writable> output, TParameters params, Priority priority, WorkProgress progress, long work);
 	}
 	
 	public static interface ManyToOne<Output extends DataFormat, TParameters> extends DataToDataOperation<Output, TParameters>, IOperation.ManyToOne {
-		public AsyncWork<Void,? extends Exception> execute(List<Data> input, Pair<Data,IO.Writable> output, TParameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Void,? extends Exception> execute(List<Data> input, Pair<Data,IO.Writable> output, TParameters params, Priority priority, WorkProgress progress, long work);
 	}
 	
 }

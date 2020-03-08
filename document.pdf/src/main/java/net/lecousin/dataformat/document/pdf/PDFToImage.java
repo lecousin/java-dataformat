@@ -5,8 +5,10 @@ import java.io.IOException;
 
 import net.lecousin.dataformat.core.operations.Operation;
 import net.lecousin.dataformat.image.ImageDataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
@@ -64,16 +66,13 @@ public class PDFToImage {
 		}
 		
 		@Override
-		public AsyncWork<Pair<BufferedImage,Object>,IOException> execute(PDDocument input, Parameters params, byte priority, WorkProgress progress, long work) {
-			Task<Pair<BufferedImage,Object>,IOException> task = new Task.Cpu<Pair<BufferedImage,Object>,IOException>("Extract page from PDF to image", priority) {
-				@Override
-				public Pair<BufferedImage,Object> run() throws IOException {
-					PDFRenderer renderer = new PDFRenderer(input);
-					BufferedImage img = renderer.renderImage(params.page - 1);
-					if (progress != null) progress.progress(work);
-					return new Pair<>(img,null);
-				}
-			};
+		public AsyncSupplier<Pair<BufferedImage,Object>,IOException> execute(PDDocument input, Parameters params, Priority priority, WorkProgress progress, long work) {
+			Task<Pair<BufferedImage,Object>,IOException> task = Task.cpu("Extract page from PDF to image", priority, t -> {
+				PDFRenderer renderer = new PDFRenderer(input);
+				BufferedImage img = renderer.renderImage(params.page - 1);
+				if (progress != null) progress.progress(work);
+				return new Pair<>(img,null);
+			});
 			task.start();
 			return task.getOutput();
 		}
@@ -136,12 +135,12 @@ public class PDFToImage {
 		}
 		
 		@Override
-		public AsyncWork<Object, ? extends Exception> initOperation(PDDocument input, Parameters params, byte priority, WorkProgress progress, long work) {
+		public AsyncSupplier<Object, ? extends Exception> initOperation(PDDocument input, Parameters params, Priority priority, WorkProgress progress, long work) {
 			Op op = new Op();
 			op.renderer = new PDFRenderer(input);
 			op.nbPages = input.getNumberOfPages();
 			if (progress != null) progress.progress(work);
-			return new AsyncWork<>(op, null);
+			return new AsyncSupplier<>(op, null);
 		}
 		
 		@Override
@@ -150,16 +149,16 @@ public class PDFToImage {
 		}
 		
 		@Override
-		public AsyncWork<BufferedImage, IOException> nextOutput(Object operation, byte priority, WorkProgress progress, long work) {
+		public AsyncSupplier<BufferedImage, IOException> nextOutput(Object operation, Priority priority, WorkProgress progress, long work) {
 			Op op = (Op)operation;
 			if (op.pageIndex == op.nbPages) {
 				if (progress != null) progress.progress(work);
-				return new AsyncWork<>(null, null);
+				return new AsyncSupplier<>(null, null);
 			}
-			RenderImage task = new RenderImage(op.renderer, op.pageIndex++, priority);
+			Task<BufferedImage, IOException> task = Task.cpu("Render PDF Page as Image", priority, new RenderImage(op.renderer, op.pageIndex++));
 			task.start();
 			if (progress != null)
-				task.getOutput().listenInline(new Runnable() {
+				task.getOutput().onDone(new Runnable() {
 					@Override
 					public void run() {
 						progress.progress(work);
@@ -168,16 +167,15 @@ public class PDFToImage {
 			return task.getOutput();
 		}
 		
-		public static class RenderImage extends Task.Cpu<BufferedImage, IOException> {
-			public RenderImage(PDFRenderer renderer, int pageIndex, byte priority) {
-				super("Render PDF Page as Image", priority);
+		public static class RenderImage implements Executable<BufferedImage, IOException> {
+			public RenderImage(PDFRenderer renderer, int pageIndex) {
 				this.renderer = renderer;
 				this.pageIndex = pageIndex;
 			}
 			private PDFRenderer renderer;
 			private int pageIndex;
 			@Override
-			public BufferedImage run() throws IOException {
+			public BufferedImage execute(Task<BufferedImage, IOException> taskContext) throws IOException {
 				return renderer.renderImage(pageIndex);
 			}
 		}

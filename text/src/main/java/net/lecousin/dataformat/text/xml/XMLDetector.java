@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.text.TextSpecializationDetectorWithFirstLines;
-import net.lecousin.framework.util.UnprotectedString;
+import net.lecousin.framework.text.CharArrayString;
 import net.lecousin.framework.xml.XMLStreamReader;
 
 public class XMLDetector implements TextSpecializationDetectorWithFirstLines.Plugin {
@@ -18,9 +18,9 @@ public class XMLDetector implements TextSpecializationDetectorWithFirstLines.Plu
 	}
 	
 	@Override
-	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars) {
+	public DataFormat detect(Data data, ArrayList<CharArrayString> lines, char[] allHeaderChars, int nbHeaderChars) {
 		// if the first lines starts with a <?xml tag, we are sure
-		UnprotectedString line = lines.get(0);
+		CharArrayString line = lines.get(0);
 		if (line.startsWith("<?") && line.length() >= 5) {
 			char c1 = line.charAt(2);
 			char c2 = line.charAt(3);

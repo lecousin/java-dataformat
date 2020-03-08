@@ -2,9 +2,10 @@ package net.lecousin.dataformat.archive.zip;
 
 import java.io.IOException;
 
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Seekable.SeekType;
@@ -18,20 +19,18 @@ class ZipArchiveExtractor {
 		this.zip = zip;
 		this.zip_io = (IO.Readable.Seekable)zip.io;
 		this.reverse_io = new BufferedReverseIOReading((IO.Readable.Seekable&IO.KnownSize)zip_io, 65536);
-		this.reverse_io.canStartReading().listenAsync(new SearchEndOfCentralDirectory(), true);
+		this.reverse_io.canStartReading().thenStart("Searching Zip end of central directory in "+zip.io.getSourceDescription(), zip.io.getPriority(), new SearchEndOfCentralDirectory(), true);
 	}
 	
 	private ZipArchive zip;
 	private BufferedReverseIOReading reverse_io;
 	private IO.Readable.Seekable zip_io;
-	AsyncWork<Void,Exception> done = new AsyncWork<>();
+	AsyncSupplier<Void,Exception> done = new AsyncSupplier<>();
 	
-	private class SearchEndOfCentralDirectory extends Task.Cpu<Void,NoException> {
-		private SearchEndOfCentralDirectory() {
-			super("Searching Zip end of central directory in "+zip.io.getSourceDescription(), zip.io.getPriority());
-		}
+	private class SearchEndOfCentralDirectory implements Executable<Void,NoException> {
+
 		@Override
-		public Void run() {
+		public Void execute(Task<Void, NoException> taskContext) {
 			Logger logger = ZipArchive.getLogger();
 			long start = System.nanoTime();
 			// we start from the end of the file
@@ -77,7 +76,7 @@ class ZipArchiveExtractor {
 				return null;
 			}
 			reverse_io.stop();
-			zip_io.seekAsync(SeekType.FROM_BEGINNING, zip.endOfCentralDirectory.centralDirectoryOffset).listenInline(new Runnable() {
+			zip_io.seekAsync(SeekType.FROM_BEGINNING, zip.endOfCentralDirectory.centralDirectoryOffset).onDone(new Runnable() {
 				@SuppressWarnings("resource")
 				@Override
 				public void run() {
@@ -85,17 +84,17 @@ class ZipArchiveExtractor {
 					if (zip_io instanceof IO.KnownSize) {
 						try {
 							long size = ((IO.KnownSize)zip_io).getSizeSync();
-							io_buf = new PreBufferedReadable(zip_io, size - zip.endOfCentralDirectory.centralDirectoryOffset, 1024, getPriority(), 8192, getPriority(), 8);
+							io_buf = new PreBufferedReadable(zip_io, size - zip.endOfCentralDirectory.centralDirectoryOffset, 1024, taskContext.getPriority(), 8192, taskContext.getPriority(), 8);
 						} catch (IOException e) {
 							done.unblockError(e);
 							return;
 						}
 					} else
-						io_buf = new PreBufferedReadable(zip_io, 1024, getPriority(), 8192, getPriority(), 8);
-					SynchronizationPoint<IOException> cd = ZipArchiveRecords.readCentralDirectory(io_buf, (entry) -> {
+						io_buf = new PreBufferedReadable(zip_io, 1024, taskContext.getPriority(), 8192, taskContext.getPriority(), 8);
+					Async<IOException> cd = ZipArchiveRecords.readCentralDirectory(io_buf, (entry) -> {
 						zip.centralDirectory.add(entry);
 					});
-					cd.listenInline(() -> {
+					cd.onDone(() -> {
 						if (logger.debug())
 							logger.debug("Zip analyzed in "+(System.nanoTime()-start)/1000000+"ms.");
 						done.unblockSuccess(null);

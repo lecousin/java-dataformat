@@ -9,8 +9,9 @@ import fr.opensagres.poi.xwpf.converter.pdf.PdfOptions;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatWriteOperation;
 import net.lecousin.dataformat.document.pdf.PDFDataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsOutputStream;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -45,19 +46,16 @@ public class DOCX2PDF implements DataFormatWriteOperation.OneToOne<XWPFDocument,
 	}
 	
 	@Override
-	public AsyncWork<Void, IOException> execute(XWPFDocument input, Pair<Data,IO.Writable> output, Object params, byte priority, WorkProgress progress, long work) {
-		Task<Void,IOException> task = new Task.Cpu<Void,IOException>("docx to pdf", priority) {
-			@Override
-			public Void run() throws IOException {
-				PdfOptions options = PdfOptions.create();
-				output.getValue2().lockClose();
-				PdfConverter.getInstance().convert(input, IOAsOutputStream.get(output.getValue2()), options);
-				output.getValue2().unlockClose();
-				output.getValue1().setFormat(PDFDataFormat.instance);
-				if (progress != null) progress.progress(work);
-				return null;
-			}
-		};
+	public AsyncSupplier<Void, IOException> execute(XWPFDocument input, Pair<Data,IO.Writable> output, Object params, Priority priority, WorkProgress progress, long work) {
+		Task<Void,IOException> task = Task.cpu("docx to pdf", priority, t -> {
+			PdfOptions options = PdfOptions.create();
+			output.getValue2().lockClose();
+			PdfConverter.getInstance().convert(input, IOAsOutputStream.get(output.getValue2()), options);
+			output.getValue2().unlockClose();
+			output.getValue1().setFormat(PDFDataFormat.instance);
+			if (progress != null) progress.progress(work);
+			return null;
+		});
 		task.start();
 		return task.getOutput();
 	}

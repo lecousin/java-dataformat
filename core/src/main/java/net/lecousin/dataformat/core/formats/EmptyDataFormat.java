@@ -4,9 +4,10 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.actions.InitNewDataAction;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.LocalizableString;
@@ -26,7 +27,7 @@ public class EmptyDataFormat implements DataFormat {
 	}
 	
 	@Override
-	public AsyncWork<DataFormatInfo,Exception> getInfo(Data data, byte priority) {
+	public AsyncSupplier<DataFormatInfo,Exception> getInfo(Data data, Priority priority) {
 		return null;
 	}
 	
@@ -53,8 +54,8 @@ public class EmptyDataFormat implements DataFormat {
 		}
 
 		@Override
-		public ISynchronizationPoint<NoException> execute(Data data, IO.Writable io, Void params, WorkProgress progress, long work) {
-			return new SynchronizationPoint<>(true);
+		public IAsync<NoException> execute(Data data, IO.Writable io, Void params, WorkProgress progress, long work) {
+			return new Async<>(true);
 		}
 		
 	};

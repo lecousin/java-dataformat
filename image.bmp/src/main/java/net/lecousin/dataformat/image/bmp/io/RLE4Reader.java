@@ -4,8 +4,9 @@ import java.awt.image.DataBufferByte;
 import java.awt.image.Raster;
 
 import net.lecousin.dataformat.image.io.ImageReader;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 
@@ -24,19 +25,17 @@ public class RLE4Reader extends ImageReader {
 	private byte[] data;
 	
 	@Override
-	protected ISynchronizationPoint<Exception> readImageData(IO.ReadableByteStream io) {
-		return new Read(io).getOutput();
+	protected IAsync<Exception> readImageData(IO.ReadableByteStream io) {
+		return Task.cpu("Read RLE4 bitmap", io.getPriority(), new Read(io)).start().getOutput();
 	}
 	
-	private class Read extends Task.Cpu<Void, Exception> {
+	private class Read implements Executable<Void, Exception> {
 		private Read(IO.ReadableByteStream input) {
-			super("Read RLE4 bitmap", input.getPriority());
 			this.input = input;
-			start();
 		}
 		private IO.ReadableByteStream input;
 		@Override
-		public Void run() throws Exception {
+		public Void execute(Task<Void, Exception> task) throws Exception {
 			int x = 0;
 			int y = header.bottomUp ? header.height - 1 : 0;
 			int lineSize = header.width / 2;

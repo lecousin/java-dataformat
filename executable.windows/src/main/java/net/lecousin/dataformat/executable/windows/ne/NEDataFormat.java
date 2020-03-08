@@ -5,7 +5,8 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
 import net.lecousin.dataformat.executable.windows.msdos.MZDataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -37,15 +38,15 @@ public class NEDataFormat extends MZDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		// TODO
 		return null;
 	}
 	
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
 		progress.progress(work);
-		return new AsyncWork<>(null, null);
+		return new AsyncSupplier<>(null, null);
 	}
 	
 	@Override

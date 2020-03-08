@@ -13,7 +13,8 @@ import net.lecousin.dataformat.core.operations.search.SearchSingleDataToType;
 import net.lecousin.dataformat.image.ImageDataFormat;
 import net.lecousin.dataformat.image.ico.ICOCURFormat.Image;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -84,8 +85,8 @@ public abstract class ExtractBiggestImageOp<T extends ICOCURFormat> implements D
 
 
 	@Override
-	public AsyncWork<Pair<java.awt.Image, Object>, ? extends Exception> execute(Data data, Void params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Pair<java.awt.Image, Object>, Exception> result = new AsyncWork<>();
+	public AsyncSupplier<Pair<java.awt.Image, Object>, ? extends Exception> execute(Data data, Void params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Pair<java.awt.Image, Object>, Exception> result = new AsyncSupplier<>();
 		WorkProgress subDataProgress = ((ICOCURFormat)data.getDetectedFormat()).listenSubData(data, new CollectionListener<Data>() {
 			@Override
 			public void elementsReady(Collection<? extends Data> elements) {
@@ -139,7 +140,7 @@ public abstract class ExtractBiggestImageOp<T extends ICOCURFormat> implements D
 	}
 	
 	@SuppressWarnings({ "unchecked", "rawtypes" })
-	private static void extract(List<Data> list, int index, byte priority, AsyncWork<Pair<java.awt.Image, Object>, Exception> result, WorkProgress progress, long work) {
+	private static void extract(List<Data> list, int index, Priority priority, AsyncSupplier<Pair<java.awt.Image, Object>, Exception> result, WorkProgress progress, long work) {
 		if (index == list.size()) {
 			Exception error = new Exception("No image can be read from ICO/CUR data");
 			result.error(error);
@@ -148,8 +149,8 @@ public abstract class ExtractBiggestImageOp<T extends ICOCURFormat> implements D
 		}
 		Data data = list.get(index);
 		long step = work / 5;
-		AsyncWork<DataFormat, Exception> detect = data.detectFinalFormat(priority, progress, step);
-		detect.listenInline(() -> {
+		AsyncSupplier<DataFormat, Exception> detect = data.detectFinalFormat(priority, progress, step);
+		detect.onDone(() -> {
 			if (detect.hasError()) {
 				extract(list, index + 1, priority, result, progress, work - step);
 				return;
@@ -159,10 +160,10 @@ public abstract class ExtractBiggestImageOp<T extends ICOCURFormat> implements D
 				extract(list, index + 1, priority, result, progress, work - step);
 				return;
 			}
-			AsyncWork<Pair<java.awt.Image,Object>,? extends Exception> opResult = ((DataFormatReadOperation.OneToOne)op).execute(data, op.createDefaultParameters(), priority, progress, work - step);
-			opResult.listenInlineSP(() -> {
+			AsyncSupplier<Pair<java.awt.Image,Object>,? extends Exception> opResult = ((DataFormatReadOperation.OneToOne)op).execute(data, op.createDefaultParameters(), priority, progress, work - step);
+			opResult.onDone(() -> {
 				result.unblockSuccess(new Pair<>(opResult.getResult().getValue1(), new Triple<>(data, op, opResult.getResult())));
-			}, result);
+			}, result, e -> e);
 		});
 	}
 

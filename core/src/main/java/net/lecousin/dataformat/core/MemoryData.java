@@ -1,6 +1,9 @@
 package net.lecousin.dataformat.core;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import java.io.IOException;
+
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ByteArrayIO;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -44,8 +47,8 @@ public class MemoryData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
-		return new AsyncWork<>(new ByteArrayIO(data, "MemoryData"), null);
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
+		return new AsyncSupplier<>(new ByteArrayIO(data, "MemoryData"), null);
 	}
 
 	@Override
@@ -54,7 +57,7 @@ public class MemoryData extends Data {
 	}
 
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 	

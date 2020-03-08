@@ -10,7 +10,8 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.FakeWorkProgress;
@@ -51,8 +52,8 @@ public class PhysicalDrivesDataFormat implements ContainerDataFormat {
 	}
 
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
-		return new AsyncWork<>(null, null);
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
+		return new AsyncSupplier<>(null, null);
 	}
 
 	private static Map<PhysicalDrive, PhysicalDriveData> drivesData = new HashMap<>();

@@ -5,8 +5,10 @@ import java.io.IOException;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.image.ImageDataFormat;
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Seekable.SeekType;
 import net.lecousin.framework.io.util.DataUtil;
@@ -40,25 +42,24 @@ public class JPEGDataFormat extends ImageDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<JPEGInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<?,Exception> open = data.openReadOnly(priority);
+	public AsyncSupplier<JPEGInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<?,IOException> open = data.openReadOnly(priority);
 		if (open == null)
-			return new AsyncWork<>(null,null);
+			return new AsyncSupplier<>(null,null);
 		@SuppressWarnings({ "unchecked", "rawtypes" })
-		LoadInfo<?> load = new LoadInfo(open, priority);
+		Task<JPEGInfo,Exception> load = Task.cpu("Loading JPEG info", priority, new LoadInfo(open));
 		load.startOn(open, false);
 		return load.getOutput();
 	}
 	
-	public static class LoadInfo<T extends IO.Readable.Seekable&IO.Readable.Buffered> extends Task.Cpu<JPEGInfo,Exception> {
-		public LoadInfo(AsyncWork<T,Exception> open, byte priority) {
-			super("Loading JPEG info", priority);
+	public static class LoadInfo<T extends IO.Readable.Seekable&IO.Readable.Buffered> implements Executable<JPEGInfo,Exception> {
+		public LoadInfo(AsyncSupplier<T,Exception> open) {
 			this.open = open;
 		}
-		private AsyncWork<T,Exception> open;
+		private AsyncSupplier<T,Exception> open;
 		private Logger logger = getLogger();
 		@Override
-		public JPEGInfo run() throws Exception {
+		public JPEGInfo execute(Task<JPEGInfo,Exception> task) throws Exception {
 			JPEGInfo info = new JPEGInfo();
 			try (T io = open.getResult()) {
 				io.skip(2);
@@ -92,7 +93,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 					readFrame(io, info);
 					break;
 				case 0xDA:
-					size = DataUtil.readUnsignedShortBigEndian(io);
+					size = DataUtil.Read16U.BE.read(io);
 					io.skip(size-2);
 					skipEntropyData(io);
 					break;
@@ -101,7 +102,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 				case 0xCC:
 				case 0xDB:
 				case 0xDE:
-					size = DataUtil.readUnsignedShortBigEndian(io);
+					size = DataUtil.Read16U.BE.read(io);
 					io.skip(size-2);
 					break;
 				case 0xDC:
@@ -117,7 +118,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 				case 0xD9: return; // end of image
 				case 0xE0: // JFIF
 				case 0xE1: // EXIF
-					size = DataUtil.readUnsignedShortBigEndian(io);
+					size = DataUtil.Read16U.BE.read(io);
 					io.skip(size-2);
 					break;
 				case 0xFE:
@@ -127,7 +128,7 @@ public class JPEGDataFormat extends ImageDataFormat {
 					if (logger.debug())
 						logger.debug("Unknown JPEG Marker "+b+" at "+io.getPosition()+" in "+io.getSourceDescription());
 					// let's do like we know this tag
-					size = DataUtil.readUnsignedShortBigEndian(io);
+					size = DataUtil.Read16U.BE.read(io);
 					io.skip(size-2);
 					break;
 				}
@@ -135,15 +136,15 @@ public class JPEGDataFormat extends ImageDataFormat {
 		}
 		
 		private void readFrame(T io, JPEGInfo info) throws IOException {
-			int size = DataUtil.readUnsignedShortBigEndian(io);
+			int size = DataUtil.Read16U.BE.read(io);
 			io.read();
-			info.height = DataUtil.readUnsignedShortBigEndian(io);
-			info.width = DataUtil.readUnsignedShortBigEndian(io);
+			info.height = DataUtil.Read16U.BE.read(io);
+			info.width = DataUtil.Read16U.BE.read(io);
 			io.skip(size-2-1-2-2);
 		}
 		
 		private void readComment(T io, JPEGInfo info) throws IOException {
-			int size = DataUtil.readUnsignedShortBigEndian(io);
+			int size = DataUtil.Read16U.BE.read(io);
 			byte[] b = new byte[size-2];
 			io.readFully(b);
 			info.comment = new String(b);

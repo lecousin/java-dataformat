@@ -8,7 +8,8 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.file.FileData;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.core.operations.DataToDataOperation;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.locale.CompositeLocalizable;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -69,8 +70,8 @@ public class DataFormatReadOperationOneToOneWithConversion<Input extends DataFor
 	
 	@SuppressWarnings("resource")
 	@Override
-	public AsyncWork<Pair<Output, Object>, Exception> execute(Data data, CompositeNamedObject params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Pair<Output, Object>, Exception> result = new AsyncWork<>();
+	public AsyncSupplier<Pair<Output, Object>, Exception> execute(Data data, CompositeNamedObject params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Pair<Output, Object>, Exception> result = new AsyncSupplier<>();
 		long stepConversion = work*75/100;
 		long stepRead = work - stepConversion;
 		File tmpFile;
@@ -83,16 +84,16 @@ public class DataFormatReadOperationOneToOneWithConversion<Input extends DataFor
 		tmpFile.deleteOnExit();
 		FileData tmpData = FileData.get(tmpFile);
 		FileIO.WriteOnly out = new FileIO.WriteOnly(tmpFile, priority);
-		AsyncWork<Void,? extends Exception> conv = conversion.execute(data, new Pair<>(tmpData, out), params.get(0), priority, progress, stepConversion);
-		conv.listenInline(new Runnable() {
+		AsyncSupplier<Void,? extends Exception> conv = conversion.execute(data, new Pair<>(tmpData, out), params.get(0), priority, progress, stepConversion);
+		conv.onDone(new Runnable() {
 			@Override
 			public void run() {
 				try { out.close(); }
 				catch (Exception e) {}
 				if (conv.hasError()) { result.error(conv.getError()); return; }
 				if (conv.isCancelled()) { result.cancel(conv.getCancelEvent()); return; }
-				AsyncWork<Pair<Output, Object>, ? extends Exception> r = read.execute(tmpData, params.get(1), priority, progress, stepRead);
-				r.listenInline(new Runnable() {
+				AsyncSupplier<Pair<Output, Object>, ? extends Exception> r = read.execute(tmpData, params.get(1), priority, progress, stepRead);
+				r.onDone(new Runnable() {
 					@Override
 					public void run() {
 						tmpFile.delete();

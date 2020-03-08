@@ -8,7 +8,8 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.core.operations.DataFormatWriteOperation;
 import net.lecousin.dataformat.core.operations.DataToDataOperation;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.CompositeLocalizable;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -60,16 +61,16 @@ public class DataToDataOperationOneToOneReadThenWrite<Input extends DataFormat, 
 	}
 	
 	@Override
-	public AsyncWork<Void, Exception> execute(Data input, Pair<Data, IO.Writable> output, CompositeNamedObject params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Void, Exception> result = new AsyncWork<>();
-		AsyncWork<Pair<Object,Object>, ? extends Exception> r = read.execute(input, params.get(0), priority, progress, work/2);
-		r.listenInline(new Runnable() {
+	public AsyncSupplier<Void, Exception> execute(Data input, Pair<Data, IO.Writable> output, CompositeNamedObject params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Void, Exception> result = new AsyncSupplier<>();
+		AsyncSupplier<Pair<Object,Object>, ? extends Exception> r = read.execute(input, params.get(0), priority, progress, work/2);
+		r.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (r.hasError()) { result.error(r.getError()); return; }
 				if (r.isCancelled()) { result.cancel(r.getCancelEvent()); return; }
-				AsyncWork<Void,? extends Exception> w = write.execute(r.getResult().getValue1(), output, params.get(1), priority, progress, work-(work/2));
-				w.listenInline(new Runnable() {
+				AsyncSupplier<Void,? extends Exception> w = write.execute(r.getResult().getValue1(), output, params.get(1), priority, progress, work-(work/2));
+				w.onDone(new Runnable() {
 					@Override
 					public void run() {
 						read.release(input, r.getResult());

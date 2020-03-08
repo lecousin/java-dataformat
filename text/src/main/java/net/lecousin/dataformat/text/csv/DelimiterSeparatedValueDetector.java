@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.text.TextSpecializationDetectorWithFirstLines;
-import net.lecousin.framework.util.UnprotectedString;
+import net.lecousin.framework.text.CharArrayString;
 
 public class DelimiterSeparatedValueDetector implements TextSpecializationDetectorWithFirstLines.Plugin {
 
@@ -19,7 +19,7 @@ public class DelimiterSeparatedValueDetector implements TextSpecializationDetect
 	}
 	
 	@Override
-	public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars) {
+	public DataFormat detect(Data data, ArrayList<CharArrayString> lines, char[] allHeaderChars, int nbHeaderChars) {
 		if (lines.size() < 2)
 			return null; // if only one line, we cannot check there is the same number of columns, so we cannot tell the format
 		// try to detect most common: comma, tab, colon, pipe
@@ -64,9 +64,9 @@ public class DelimiterSeparatedValueDetector implements TextSpecializationDetect
 			int currentFields = 1;
 			boolean inQuotes = false;
 			int nbLines = 0;
-			for (UnprotectedString s : lines) {
+			for (CharArrayString s : lines) {
 				char[] chars = s.charArray();
-				int off = s.charArrayStart();
+				int off = s.arrayStart();
 				int len = s.length();
 				for (int i = off; i < off+len; ++i) {
 					if (chars[i] == '"') {
@@ -100,10 +100,10 @@ public class DelimiterSeparatedValueDetector implements TextSpecializationDetect
 		return null;
 	}
 	
-	private static int[] countCharacters(UnprotectedString line) {
+	private static int[] countCharacters(CharArrayString line) {
 		int[] counts = new int[4];
 		char[] chars = line.charArray();
-		int offset = line.charArrayStart();
+		int offset = line.arrayStart();
 		for (int i = 0; i < line.length(); ++i)
 			switch (chars[offset+i]) {
 			case ',': counts[0]++; break;

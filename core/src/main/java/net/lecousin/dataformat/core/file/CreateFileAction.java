@@ -6,7 +6,8 @@ import java.nio.file.FileAlreadyExistsException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.actions.CreateDataAction;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -50,19 +51,19 @@ public class CreateFileAction extends CreateDataAction<CreateFileAction.NewDataP
 
 	@SuppressWarnings("resource")
 	@Override
-	public AsyncWork<Pair<Data, IO.Writable>, IOException> execute(Data data, NewDataParameter parameter, byte priority, WorkProgress progress, long work) {
+	public AsyncSupplier<Pair<Data, IO.Writable>, IOException> execute(Data data, NewDataParameter parameter, Priority priority, WorkProgress progress, long work) {
 		File file = new File(((FileData)data).file, parameter.name);
 		if (file.exists())
-			return new AsyncWork<>(null, new FileAlreadyExistsException(file.getAbsolutePath()));
+			return new AsyncSupplier<>(null, new FileAlreadyExistsException(file.getAbsolutePath()));
 		try {
 			if (!file.createNewFile())
 				throw new IOException("Unable to create file " + file.getAbsolutePath());
 		} catch (IOException err) {
-			return new AsyncWork<>(null, err);
+			return new AsyncSupplier<>(null, err);
 		}
 		FileIO.WriteOnly io = new FileIO.WriteOnly(file, priority);
 		progress.progress(work);
-		return new AsyncWork<>(new Pair<>(FileData.get(file), io), null);
+		return new AsyncSupplier<>(new Pair<>(FileData.get(file), io), null);
 	}
 
 }

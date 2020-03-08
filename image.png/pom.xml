@@ -23,7 +23,7 @@
   	<dependency>
   		<groupId>net.lecousin.compression</groupId>
   		<artifactId>deflate</artifactId>
-  		<version>0.1.7</version>
+  		<version>0.1.10</version>
   	</dependency>
   	<dependency>
   		<groupId>commons-logging</groupId>
@@ -33,7 +33,7 @@
   	<dependency>
   		<groupId>net.lecousin.framework</groupId>
   		<artifactId>log.bridges.commons-logging</artifactId>
-  		<version>0.15.0</version>
+  		<version>${log.bridges.version}</version>
   	</dependency>
 
   	<dependency>

@@ -1,6 +1,9 @@
 package net.lecousin.dataformat.core;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import java.io.IOException;
+
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.SubIO;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -56,10 +59,10 @@ public class SubData extends Data {
 	}
 
 	@Override
-	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
-		AsyncWork<IO.Readable, Exception> result = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable, Exception> open = parent.openReadOnly(priority);
-		open.listenInline(new Runnable() {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
+		AsyncSupplier<IO.Readable, IOException> result = new AsyncSupplier<>();
+		AsyncSupplier<? extends IO.Readable, IOException> open = parent.openReadOnly(priority);
+		open.onDone(new Runnable() {
 			@SuppressWarnings("resource")
 			@Override
 			public void run() {
@@ -71,7 +74,7 @@ public class SubData extends Data {
 					return;
 				}
 				IO io = open.getResult();
-				name.appLocalization().listenInline((localizedName) -> {
+				name.appLocalization().onDone((localizedName) -> {
 					result.unblockSuccess(new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, offset, size, localizedName, true));
 				});
 			}
@@ -85,10 +88,10 @@ public class SubData extends Data {
 	}
 	
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
-		AsyncWork<T, Exception> result = new AsyncWork<>();
-		AsyncWork<T, ? extends Exception> open = parent.openReadWrite(priority);
-		open.listenInline(new Runnable() {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
+		AsyncSupplier<T, IOException> result = new AsyncSupplier<>();
+		AsyncSupplier<T, IOException> open = parent.openReadWrite(priority);
+		open.onDone(new Runnable() {
 			@SuppressWarnings({ "resource", "unchecked" })
 			@Override
 			public void run() {
@@ -100,7 +103,7 @@ public class SubData extends Data {
 					return;
 				}
 				T io = open.getResult();
-				name.appLocalization().listenInline((localizedName) -> {
+				name.appLocalization().onDone((localizedName) -> {
 					result.unblockSuccess((T)new SubIO.ReadWrite(io, offset, size, localizedName, true));
 				});
 			}

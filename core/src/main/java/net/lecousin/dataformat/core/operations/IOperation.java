@@ -1,11 +1,13 @@
 package net.lecousin.dataformat.core.operations;
 
+import java.util.function.Supplier;
+
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-import net.lecousin.framework.util.Provider;
 
 /**
  * Base interface for operations.
@@ -33,7 +35,7 @@ public interface IOperation<TParameters> {
 		 * The initialization may allow to retrieve necessary information about the output that will be generated, such
 		 * as the number of output.
 		 */
-		public AsyncWork<Object, ? extends Exception> initOperation(Input input, Parameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Object, ? extends Exception> initOperation(Input input, Parameters params, Priority priority, WorkProgress progress, long work);
 
 		/** If known return the number of outputs that will be generated, or -1 if not known. */
 		public int getNbOutputs(Object operation);
@@ -41,7 +43,7 @@ public interface IOperation<TParameters> {
 		/**
 		 * Produce the next output. If the operation is finished, return an AsyncWork with a null result. 
 		 */
-		public AsyncWork<Output, ? extends Exception> nextOutput(Object operation, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Output, ? extends Exception> nextOutput(Object operation, Priority priority, WorkProgress progress, long work);
 		
 		public void releaseOutput(Output output);
 		public void releaseOperation(Object operation);
@@ -62,7 +64,7 @@ public interface IOperation<TParameters> {
 		 * The inputProvider is called each time it needs a new input.
 		 * The inputProvider must return an AsyncWork with a null result when no more input is available and the operation should end.
 		 */
-		public AsyncWork<Object, ? extends Exception> initOperation(Provider<AsyncWork<Input,? extends Exception>> inputProvider, int nbInputs, Parameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Object, ? extends Exception> initOperation(Supplier<AsyncSupplier<Input,? extends Exception>> inputProvider, int nbInputs, Parameters params, Priority priority, WorkProgress progress, long work);
 		
 		/** If known return the number of outputs that will be generated, or -1 if not known. */
 		public int getNbOutputs(Object operation);
@@ -70,7 +72,7 @@ public interface IOperation<TParameters> {
 		/**
 		 * Produce the next output. If the operation is finished, return an AsyncWork with a null result. 
 		 */
-		public AsyncWork<Output, ? extends Exception> nextOutput(Object operation, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Output, ? extends Exception> nextOutput(Object operation, Priority priority, WorkProgress progress, long work);
 		
 		public void releaseOutput(Output output);
 		public void releaseOperation(Object operation);

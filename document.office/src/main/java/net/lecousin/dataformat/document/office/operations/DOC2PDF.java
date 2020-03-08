@@ -20,8 +20,9 @@ import org.w3c.dom.Document;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatWriteOperation;
 import net.lecousin.dataformat.document.pdf.PDFDataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsOutputStream;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -56,36 +57,33 @@ public class DOC2PDF implements DataFormatWriteOperation.OneToOne<HWPFDocument, 
 	}
 	
 	@Override
-	public AsyncWork<Void, Exception> execute(HWPFDocument input, Pair<Data,IO.Writable> output, Object params, byte priority, WorkProgress progress, long work) {
-		Task<Void,Exception> task = new Task.Cpu<Void,Exception>("doc to pdf", priority) {
-			@Override
-			public Void run() throws Exception {
-				long stepToFo = work / 3;
-				long stepFop = work - stepToFo;
-				
-				WordToFoConverter wordToFoConverter = new WordToFoConverter(XMLHelper.getDocumentBuilderFactory().newDocumentBuilder().newDocument() );
-		        wordToFoConverter.processDocument(input);
-		        Document fo = wordToFoConverter.getDocument();
-		        if (progress != null) progress.progress(stepToFo);
-		        
-		        FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
-		        output.getValue2().lockClose();
-		        try {
-			        Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, IOAsOutputStream.get(output.getValue2()));
-			        TransformerFactory factory = TransformerFactory.newInstance();
-			        Transformer transformer = factory.newTransformer();
-			        Source src = new DOMSource(fo);
-			        Result res = new SAXResult(fop.getDefaultHandler());
-			        transformer.transform(src, res);
-		        } finally {
-			        output.getValue2().unlockClose();
-		        }
-		        
-				output.getValue1().setFormat(PDFDataFormat.instance);
-				if (progress != null) progress.progress(stepFop);
-				return null;
-			}
-		};
+	public AsyncSupplier<Void, Exception> execute(HWPFDocument input, Pair<Data,IO.Writable> output, Object params, Priority priority, WorkProgress progress, long work) {
+		Task<Void,Exception> task = Task.cpu("doc to pdf", priority, t -> {
+			long stepToFo = work / 3;
+			long stepFop = work - stepToFo;
+			
+			WordToFoConverter wordToFoConverter = new WordToFoConverter(XMLHelper.getDocumentBuilderFactory().newDocumentBuilder().newDocument() );
+	        wordToFoConverter.processDocument(input);
+	        Document fo = wordToFoConverter.getDocument();
+	        if (progress != null) progress.progress(stepToFo);
+	        
+	        FopFactory fopFactory = FopFactory.newInstance(new File(".").toURI());
+	        output.getValue2().lockClose();
+	        try {
+		        Fop fop = fopFactory.newFop(MimeConstants.MIME_PDF, IOAsOutputStream.get(output.getValue2()));
+		        TransformerFactory factory = TransformerFactory.newInstance();
+		        Transformer transformer = factory.newTransformer();
+		        Source src = new DOMSource(fo);
+		        Result res = new SAXResult(fop.getDefaultHandler());
+		        transformer.transform(src, res);
+	        } finally {
+		        output.getValue2().unlockClose();
+	        }
+	        
+			output.getValue1().setFormat(PDFDataFormat.instance);
+			if (progress != null) progress.progress(stepFop);
+			return null;
+		});
 		task.start();
 		return task.getOutput();
 	}

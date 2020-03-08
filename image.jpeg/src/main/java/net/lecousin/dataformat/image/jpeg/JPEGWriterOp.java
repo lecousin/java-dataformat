@@ -9,8 +9,9 @@ import javax.imageio.stream.MemoryCacheImageOutputStream;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatWriteOperation;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsOutputStream;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -41,23 +42,19 @@ public class JPEGWriterOp implements DataFormatWriteOperation.OneToOne<BufferedI
 	}
 	
 	@Override
-	public AsyncWork<Void,Exception> execute(BufferedImage input, Pair<Data,IO.Writable> output, Object params, byte priority, WorkProgress progress, long work) {
-		Task<Void,Exception> task = new Task.Cpu<Void,Exception>("Generate JPEG image", priority) {
-			@SuppressWarnings("resource")
-			@Override
-			public Void run() throws Exception {
-				Iterator<ImageWriter> it = ImageIO.getImageWritersByFormatName("jpeg");
-				if (!it.hasNext())
-					throw new Exception("No available JPEG writer");
-				ImageWriter writer = it.next();
-				// TODO options ?
-				writer.setOutput(new MemoryCacheImageOutputStream(IOAsOutputStream.get(output.getValue2())));
-				writer.write(input);
-				output.getValue1().setFormat(JPEGDataFormat.instance);
-				if (progress != null) progress.progress(work);
-				return null;
-			}
-		};
+	public AsyncSupplier<Void,Exception> execute(BufferedImage input, Pair<Data,IO.Writable> output, Object params, Priority priority, WorkProgress progress, long work) {
+		Task<Void,Exception> task = Task.cpu("Generate JPEG image", priority, taskContext -> {
+			Iterator<ImageWriter> it = ImageIO.getImageWritersByFormatName("jpeg");
+			if (!it.hasNext())
+				throw new Exception("No available JPEG writer");
+			ImageWriter writer = it.next();
+			// TODO options ?
+			writer.setOutput(new MemoryCacheImageOutputStream(IOAsOutputStream.get(output.getValue2())));
+			writer.write(input);
+			output.getValue1().setFormat(JPEGDataFormat.instance);
+			if (progress != null) progress.progress(work);
+			return null;
+		});
 		task.start();
 		return task.getOutput();
 	}

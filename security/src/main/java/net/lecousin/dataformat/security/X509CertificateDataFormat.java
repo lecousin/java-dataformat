@@ -3,7 +3,8 @@ package net.lecousin.dataformat.security;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatInfo;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
@@ -40,7 +41,7 @@ public class X509CertificateDataFormat implements DataFormat {
 	}
 
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		// TODO Auto-generated method stub
 		// https://www.cryptologie.net/article/262/what-are-x509-certificates-rfc-asn1-der/
 		// https://en.wikipedia.org/wiki/X.509

@@ -1,7 +1,10 @@
 package net.lecousin.dataformat.filesystem;
 
+import java.io.IOException;
+
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
@@ -41,7 +44,7 @@ public class PhysicalDrivesData extends Data {
 	}
 
 	@Override
-	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
 		return null;
 	}
 
@@ -51,7 +54,7 @@ public class PhysicalDrivesData extends Data {
 	}
 
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 

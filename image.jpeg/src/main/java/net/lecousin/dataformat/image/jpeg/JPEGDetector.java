@@ -23,7 +23,7 @@ public class JPEGDetector implements DataFormatDetector.OnlyHeaderNeeded {
 	
 	@Override
 	public DataFormat finishDetection(Data data, byte[] header, int headerLength, long dataSize) {
-		int length = DataUtil.readUnsignedShortBigEndian(header, 4);
+		int length = DataUtil.Read16U.BE.read(header, 4);
 		if (4+length < headerLength)
 			if ((header[4+length]&0xFF) != 0xFF)
 				return null;

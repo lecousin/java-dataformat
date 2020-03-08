@@ -5,8 +5,9 @@ import java.util.LinkedList;
 
 import net.lecousin.dataformat.core.operations.Operation;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.CompositeLocalizable;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.mutable.Mutable;
@@ -87,8 +88,8 @@ public class OperationOneToOneChain<Input,Output> implements Operation.OneToOne<
 	}
 	
 	@Override
-	public AsyncWork<Pair<Output,Object>,Exception> execute(Input input, CompositeNamedObject params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Pair<Output,Object>,Exception> result = new AsyncWork<>();
+	public AsyncSupplier<Pair<Output,Object>,Exception> execute(Input input, CompositeNamedObject params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Pair<Output,Object>,Exception> result = new AsyncSupplier<>();
 		
 		MutableInteger index = new MutableInteger(0);
 		Mutable<Object> in = new Mutable<>(input);
@@ -103,7 +104,7 @@ public class OperationOneToOneChain<Input,Output> implements Operation.OneToOne<
 				index.inc();
 				long step = w.get() / (chain.size() - i);
 				w.sub(step);
-				((Operation.OneToOne)chain.get(i)).execute(in.get(), params.get(i), priority, progress, step).listenInline(new AsyncWorkListener() {
+				((Operation.OneToOne)chain.get(i)).execute(in.get(), params.get(i), priority, progress, step).listen(new Listener() {
 					@Override
 					public void ready(Object r) {
 						Pair p = (Pair)r;

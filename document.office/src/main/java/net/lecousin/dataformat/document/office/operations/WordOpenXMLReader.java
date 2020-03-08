@@ -3,10 +3,8 @@ package net.lecousin.dataformat.document.office.operations;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.document.office.WordOpenXMLFormat;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
@@ -54,10 +52,10 @@ public class WordOpenXMLReader implements DataFormatReadOperation.OneToOne<WordO
 	}
 	
 	@Override
-	public AsyncWork<Pair<XWPFDocument,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Pair<XWPFDocument,Object>,Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<XWPFDocument>,Exception> word = WordOpenXMLFormat.cache.open(data, this, priority, progress, work);
-		word.listenInline(new Runnable() {
+	public AsyncSupplier<Pair<XWPFDocument,Object>,Exception> execute(Data data, Object params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Pair<XWPFDocument,Object>,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<XWPFDocument>,Exception> word = WordOpenXMLFormat.cache.open(data, this, priority, progress, work);
+		word.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (word.isCancelled()) return;
@@ -76,19 +74,14 @@ public class WordOpenXMLReader implements DataFormatReadOperation.OneToOne<WordO
 				sp.unblockSuccess(new Pair<>(doc,null));
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				word.unblockCancel(event);
-			}
-		});
+		sp.onCancel(word::cancel);
 		return sp;
 	}
 	
 	@Override
 	public void release(Data data, Pair<XWPFDocument,Object> output) {
-		AsyncWork<CachedObject<XWPFDocument>,Exception> word = WordOpenXMLFormat.cache.open(data, this, Task.PRIORITY_LOW, null, 0);
-		word.listenInline(new Runnable() {
+		AsyncSupplier<CachedObject<XWPFDocument>,Exception> word = WordOpenXMLFormat.cache.open(data, this, Priority.LOW, null, 0);
+		word.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (word.isSuccessful()) {

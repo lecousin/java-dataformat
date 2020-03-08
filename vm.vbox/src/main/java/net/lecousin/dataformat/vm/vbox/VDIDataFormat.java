@@ -7,8 +7,9 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataWrapperDataFormat;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -52,8 +53,8 @@ public class VDIDataFormat implements DataWrapperDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<VirtualBoxDiskImage, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<VirtualBoxDiskImage, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<VirtualBoxDiskImage, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<VirtualBoxDiskImage, Exception> result = new AsyncSupplier<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)
 				content = (IO.Readable.Seekable)io;
@@ -64,7 +65,7 @@ public class VDIDataFormat implements DataWrapperDataFormat {
 					return result;
 				}
 			VirtualBoxDiskImage vdi = new VirtualBoxDiskImage(content);
-			vdi.open(progress, work).listenInline(() -> { result.unblockSuccess(vdi); }, result);
+			vdi.open(progress, work).onDone(() -> { result.unblockSuccess(vdi); }, result, e -> e);
 			return result;
 		}
 
@@ -82,10 +83,10 @@ public class VDIDataFormat implements DataWrapperDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<VDIDataFormatInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<VDIDataFormatInfo, Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(data, this, priority, null, 0);
-		get.listenAsync(new Task.Cpu.FromRunnable("Read VDI metadata", priority, () -> {
+	public AsyncSupplier<VDIDataFormatInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<VDIDataFormatInfo, Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(data, this, priority, null, 0);
+		get.thenStart("Read VDI metadata", priority, () -> {
 			@SuppressWarnings("resource")
 			VirtualBoxDiskImage vdi = get.getResult().get();
 			VDIDataFormatInfo info = new VDIDataFormatInfo();
@@ -99,16 +100,16 @@ public class VDIDataFormat implements DataWrapperDataFormat {
 			info.uid = vdi.getUID();
 			get.getResult().release(VDIDataFormat.this);
 			sp.unblockSuccess(info);
-		}), sp);
+		}, sp);
 		sp.onCancel((cancel) -> { get.cancel(cancel); });
 		return sp;
 	}
 
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
-		AsyncWork<Data, Exception> result = new AsyncWork<>();
-		AsyncWork<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(container, this, Task.PRIORITY_NORMAL, progress, work);
-		get.listenInline(() -> {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+		AsyncSupplier<Data, Exception> result = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<VirtualBoxDiskImage>, Exception> get = cache.open(container, this, Task.Priority.NORMAL, progress, work);
+		get.onDone(() -> {
 			result.unblockSuccess(new VDIContentData(container, get.getResult().get()));
 			get.getResult().release(VDIDataFormat.this);
 		}, result);

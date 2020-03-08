@@ -14,9 +14,9 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.file.FileData;
 import net.lecousin.dataformat.core.file.FileSystemDirectoryFormat;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.FakeWorkProgress;
@@ -35,19 +35,16 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 	private MountedDrivesDataFormat() {
 		WorkProgress init = Drives.getInstance().initialize();
 		isInit = false;
-		new Task.Unmanaged<Void, NoException>("Initialize mounted drives", Task.PRIORITY_NORMAL) {
-			@Override
-			public Void run() {
+		Task.unmanaged("Initialize mounted drives", Priority.NORMAL, t -> {
+			if (isInit) return null;
+			File[] roots = File.listRoots();			
+			synchronized (partitions) {
 				if (isInit) return null;
-				File[] roots = File.listRoots();			
-				synchronized (partitions) {
-					if (isInit) return null;
-					for (File root : roots)
-						partitions.add(root);
-				}
-				return null;
+				for (File root : roots)
+					partitions.add(root);
 			}
-		}.start();
+			return null;
+		}).start();
 		DriveListener dl = new DriveListener() {
 			@Override
 			public void newDrive(Drive drive) {
@@ -98,7 +95,7 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 				removed(Collections.singletonList(p));
 			}
 		};
-		init.getSynch().listenAsync(new Task.Cpu.FromRunnable("Get drives", Task.PRIORITY_NORMAL, () -> {
+		init.getSynch().thenStart("Get drives", Priority.NORMAL, () -> {
 			if (!init.getSynch().isSuccessful())
 				return;
 			synchronized (partitions) {
@@ -117,7 +114,7 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 			}
 			if (!removed.isEmpty())
 				removed(removed);
-		}), true);
+		}, true);
 	}
 	
 	private boolean isInit = false;
@@ -172,7 +169,7 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 	}
 
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		return null;
 	}
 

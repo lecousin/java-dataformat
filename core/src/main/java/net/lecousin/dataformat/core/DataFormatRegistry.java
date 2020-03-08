@@ -15,11 +15,11 @@ import net.lecousin.dataformat.core.formats.EmptyDataFormat;
 import net.lecousin.dataformat.core.formats.UnknownDataFormat;
 import net.lecousin.framework.collections.map.HalfByteHashMap;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.async.JoinPoint;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.mutable.MutableInteger;
@@ -205,147 +205,141 @@ public class DataFormatRegistry {
 		HalfByteHashMap<Object> map = new HalfByteHashMap<>();
 	}
 	
-	static AsyncWork<DataFormat,IOException> detect(Data data, IO.Readable io, long dataSize, byte priority, byte[] buf, MutableInteger bufRead, WorkProgress progress, long work) {
+	static AsyncSupplier<DataFormat,IOException> detect(Data data, IO.Readable io, long dataSize, Priority priority, byte[] buf, MutableInteger bufRead, WorkProgress progress, long work) {
 		long stepDetect = work/20;
 		long stepRead = work - stepDetect;
-		AsyncWork<DataFormat,IOException> result = new AsyncWork<DataFormat,IOException>();
+		AsyncSupplier<DataFormat,IOException> result = new AsyncSupplier<DataFormat,IOException>();
 		ByteBuffer buffer = ByteBuffer.wrap(buf);
-		AsyncWork<Integer,IOException> readTask = io.readFullyAsync(buffer);
-		Task<Void,NoException> detectTask = new Task.Cpu<Void,NoException>("Data Format detection", priority) {
-			@Override
-			public Void run() {
-				if (progress != null) progress.progress(stepRead);
-				if (readTask.isCancelled()) {
-					result.unblockCancel(readTask.getCancelEvent());
+		AsyncSupplier<Integer,IOException> readTask = io.readFullyAsync(buffer);
+		Task<Void,NoException> detectTask = Task.cpu("Data Format detection", priority, t -> {
+			if (progress != null) progress.progress(stepRead);
+			if (readTask.isCancelled()) {
+				result.unblockCancel(readTask.getCancelEvent());
+				return null;
+			}
+			if (!readTask.isSuccessful()) {
+				bufRead.set(0);
+				result.unblockError(readTask.getError());
+				return null;
+			}
+			int len = readTask.getResult().intValue();
+			if (len >= 0)
+				bufRead.set(len);
+			if (len <= 0) {
+				if (progress != null) progress.progress(stepDetect);
+				result.unblockSuccess(EmptyDataFormat.instance);
+				return null;
+			}
+			
+			LinkedList<DataFormatDetector> toFinish = new LinkedList<>();
+			LinkedList<InsideHeader> insideHeaderToProcess = new LinkedList<>();
+			LinkedList<MoreThanHeaderNeeded> toFinishOutside = new LinkedList<>();
+			// start with root
+			insideHeaderToProcess.addAll(root.otherwiseHeader);
+			detectHeader(buf, 1, len, root.map[buf[0]&0xFF], toFinish, insideHeaderToProcess);
+			do {
+				if (t.isCancelled()) {
+					result.unblockCancel(t.getCancelEvent());
 					return null;
 				}
-				if (!readTask.isSuccessful()) {
-					bufRead.set(0);
-					result.unblockError(readTask.getError());
+				// process to finish
+				while (!toFinish.isEmpty()) {
+					DataFormatDetector detector = toFinish.removeLast();
+					if (detector instanceof OnlyHeaderNeeded) {
+						DataFormat detected = ((OnlyHeaderNeeded)detector).finishDetection(data, buf, len, dataSize);
+						if (detected != null) {
+							result.unblockSuccess(detected);
+							if (progress != null) progress.progress(stepDetect);
+							return null;
+						}
+					} else
+						toFinishOutside.add((MoreThanHeaderNeeded)detector);
+				}
+				if (t.isCancelled()) {
+					result.unblockCancel(t.getCancelEvent());
 					return null;
 				}
-				int len = readTask.getResult().intValue();
-				if (len >= 0)
-					bufRead.set(len);
-				if (len <= 0) {
-					if (progress != null) progress.progress(stepDetect);
-					result.unblockSuccess(EmptyDataFormat.instance);
-					return null;
-				}
-				
-				LinkedList<DataFormatDetector> toFinish = new LinkedList<>();
-				LinkedList<InsideHeader> insideHeaderToProcess = new LinkedList<>();
-				LinkedList<MoreThanHeaderNeeded> toFinishOutside = new LinkedList<>();
-				// start with root
-				insideHeaderToProcess.addAll(root.otherwiseHeader);
-				detectHeader(buf, 1, len, root.map[buf[0]&0xFF], toFinish, insideHeaderToProcess);
-				do {
-					if (isCancelled()) {
-						result.unblockCancel(getCancelEvent());
-						return null;
-					}
-					// process to finish
-					while (!toFinish.isEmpty()) {
-						DataFormatDetector detector = toFinish.removeLast();
-						if (detector instanceof OnlyHeaderNeeded) {
-							DataFormat detected = ((OnlyHeaderNeeded)detector).finishDetection(data, buf, len, dataSize);
+				// continue inside header
+				if (!insideHeaderToProcess.isEmpty()) {
+					InsideHeader inside = insideHeaderToProcess.removeLast();
+					Object o = inside.map.get(buf[inside.pos]);
+					if (o == null) continue;
+					if (o instanceof DataFormatDetector) {
+						if (o instanceof OnlyHeaderNeeded) {
+							DataFormat detected = ((OnlyHeaderNeeded)o).finishDetection(data, buf, len, dataSize);
 							if (detected != null) {
 								result.unblockSuccess(detected);
 								if (progress != null) progress.progress(stepDetect);
 								return null;
 							}
 						} else
-							toFinishOutside.add((MoreThanHeaderNeeded)detector);
-					}
-					if (isCancelled()) {
-						result.unblockCancel(getCancelEvent());
-						return null;
-					}
-					// continue inside header
-					if (!insideHeaderToProcess.isEmpty()) {
-						InsideHeader inside = insideHeaderToProcess.removeLast();
-						Object o = inside.map.get(buf[inside.pos]);
-						if (o == null) continue;
-						if (o instanceof DataFormatDetector) {
-							if (o instanceof OnlyHeaderNeeded) {
-								DataFormat detected = ((OnlyHeaderNeeded)o).finishDetection(data, buf, len, dataSize);
-								if (detected != null) {
-									result.unblockSuccess(detected);
-									if (progress != null) progress.progress(stepDetect);
-									return null;
-								}
-							} else
-								toFinishOutside.add((MoreThanHeaderNeeded)o);
-							continue;
-						}
-						HeaderNextByte next = (HeaderNextByte)o;
-						detectHeader(buf, inside.pos+1, len, next, toFinish, insideHeaderToProcess);
+							toFinishOutside.add((MoreThanHeaderNeeded)o);
 						continue;
 					}
-					for (OnlyHeaderNeeded detector : root.otherwise) {
-						DataFormat detected = detector.finishDetection(data, buf, len, dataSize);
-						if (detected != null) {
-							result.unblockSuccess(detected);
-							if (progress != null) progress.progress(stepDetect);
-							return null;
-						}
-					}
-					break;
-				} while (true);
-				if (isCancelled()) {
-					result.unblockCancel(getCancelEvent());
-					return null;
+					HeaderNextByte next = (HeaderNextByte)o;
+					detectHeader(buf, inside.pos+1, len, next, toFinish, insideHeaderToProcess);
+					continue;
 				}
-				toFinishOutside.addAll(root.otherwiseElsewhere);
-				// TODO improve
-				if (!toFinishOutside.isEmpty()) {
-					IO.Readable.Seekable seekable;
-					if (io instanceof IO.Readable.Seekable)
-						seekable = (IO.Readable.Seekable)io;
-					else {
-						// TODO
-						result.unblockSuccess(UnknownDataFormat.instance);
+				for (OnlyHeaderNeeded detector : root.otherwise) {
+					DataFormat detected = detector.finishDetection(data, buf, len, dataSize);
+					if (detected != null) {
+						result.unblockSuccess(detected);
 						if (progress != null) progress.progress(stepDetect);
 						return null;
 					}
-					toFinishOutside.removeFirst().finishDetection(data, buf, len, seekable, dataSize).listenInline(new AsyncWorkListener<DataFormat, NoException>() {
-						@Override
-						public void ready(DataFormat detected) {
-							if (detected != null) {
-								result.unblockSuccess(detected);
-								if (progress != null) progress.progress(stepDetect);
-								return;
-							}
-							if (toFinishOutside.isEmpty()) {
-								result.unblockSuccess(UnknownDataFormat.instance);
-								if (progress != null) progress.progress(stepDetect);
-								return;
-							}
-							toFinishOutside.removeFirst().finishDetection(data, buf, len, seekable, dataSize).listenInline(this);
-						}
-						@Override
-						public void error(NoException error) {
-							ready(null);
-						}
-						@Override
-						public void cancelled(CancelException event) {
-							result.unblockCancel(event);
-						}
-					});
-					return null;
 				}
-				result.unblockSuccess(UnknownDataFormat.instance);
-				if (progress != null) progress.progress(stepDetect);
+				break;
+			} while (true);
+			if (t.isCancelled()) {
+				result.unblockCancel(t.getCancelEvent());
 				return null;
 			}
-		};
-		detectTask.startOn(readTask, true);
-		result.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				readTask.unblockCancel(event);
-				detectTask.cancel(event);
+			toFinishOutside.addAll(root.otherwiseElsewhere);
+			// TODO improve
+			if (!toFinishOutside.isEmpty()) {
+				IO.Readable.Seekable seekable;
+				if (io instanceof IO.Readable.Seekable)
+					seekable = (IO.Readable.Seekable)io;
+				else {
+					// TODO
+					result.unblockSuccess(UnknownDataFormat.instance);
+					if (progress != null) progress.progress(stepDetect);
+					return null;
+				}
+				toFinishOutside.removeFirst().finishDetection(data, buf, len, seekable, dataSize).listen(new Listener<DataFormat, NoException>() {
+					@Override
+					public void ready(DataFormat detected) {
+						if (detected != null) {
+							result.unblockSuccess(detected);
+							if (progress != null) progress.progress(stepDetect);
+							return;
+						}
+						if (toFinishOutside.isEmpty()) {
+							result.unblockSuccess(UnknownDataFormat.instance);
+							if (progress != null) progress.progress(stepDetect);
+							return;
+						}
+						toFinishOutside.removeFirst().finishDetection(data, buf, len, seekable, dataSize).listen(this);
+					}
+					@Override
+					public void error(NoException error) {
+						ready(null);
+					}
+					@Override
+					public void cancelled(CancelException event) {
+						result.unblockCancel(event);
+					}
+				});
+				return null;
 			}
+			result.unblockSuccess(UnknownDataFormat.instance);
+			if (progress != null) progress.progress(stepDetect);
+			return null;
+		});
+		detectTask.startOn(readTask, true);
+		result.onCancel(event -> {
+			readTask.unblockCancel(event);
+			detectTask.cancel(event);
 		});
 		return result;
 	}
@@ -394,93 +388,90 @@ public class DataFormatRegistry {
 		}
 	}
 	
-	static void detectSpecializations(Data data, DataFormat base, byte[] header, int headerSize, byte priority, DataFormatListener listener, WorkProgress progress, long work) {
-		Task<Void,NoException> task = new Task.Cpu<Void,NoException>("DataFormat specialization detection", priority) {
-			@Override
-			public Void run() {
-				ArrayList<DataFormatSpecializationDetector> list;
-				synchronized (specializations) {
-					list = specializations.get(base);
-				}
-				if (list == null) {
-					if (progress != null) progress.progress(work);
+	static void detectSpecializations(Data data, DataFormat base, byte[] header, int headerSize, Priority priority, DataFormatListener listener, WorkProgress progress, long work) {
+		Task<Void,NoException> task = Task.cpu("DataFormat specialization detection", priority, t -> {
+			ArrayList<DataFormatSpecializationDetector> list;
+			synchronized (specializations) {
+				list = specializations.get(base);
+			}
+			if (list == null) {
+				if (progress != null) progress.progress(work);
+				listener.endOfDetection(data);
+				return null;
+			}
+			JoinPoint<NoException> jp = new JoinPoint<>();
+			jp.addToJoin(list.size());
+			jp.start();
+			jp.onDone(new Runnable() {
+				@Override
+				public void run() {
 					listener.endOfDetection(data);
-					return null;
 				}
-				JoinPoint<NoException> jp = new JoinPoint<>();
-				jp.addToJoin(list.size());
-				jp.start();
-				jp.listenInline(new Runnable() {
+			});
+			int nb = list.size();
+			long w = work;
+			for (DataFormatSpecializationDetector detector : list) {
+				long step = w / nb--;
+				w -= step;
+				AsyncSupplier<DataFormat,NoException> sp = detector.detectSpecialization(data, priority, header, headerSize);
+				if (sp == null) {
+					if (progress != null) progress.progress(step);
+					jp.joined();
+					continue;
+				}
+				DataFormatListener subListener = new DataFormatListener() {
 					@Override
-					public void run() {
-						listener.endOfDetection(data);
+					public void formatDetected(Data data, DataFormat format) {
+						listener.formatDetected(data, format);
 					}
-				});
-				int nb = list.size();
-				long w = work;
-				for (DataFormatSpecializationDetector detector : list) {
-					long step = w / nb--;
-					w -= step;
-					AsyncWork<DataFormat,NoException> sp = detector.detectSpecialization(data, priority, header, headerSize);
-					if (sp == null) {
-						if (progress != null) progress.progress(step);
+					@Override
+					public void endOfDetection(Data data) {
 						jp.joined();
+					}
+					@Override
+					public void detectionError(Data data, Exception error) {
+						jp.joined();
+					}
+					
+					@Override
+					public void detectionCancelled(Data data) {
+						jp.joined();
+					}
+				};
+				if (sp.isDone()) {
+					DataFormat spec = sp.getResult();
+					if (spec != null) {
+						listener.formatDetected(data, spec);
+						detectSpecializations(data, spec, header, headerSize, priority, subListener, progress, step);
 						continue;
 					}
-					DataFormatListener subListener = new DataFormatListener() {
-						@Override
-						public void formatDetected(Data data, DataFormat format) {
-							listener.formatDetected(data, format);
-						}
-						@Override
-						public void endOfDetection(Data data) {
-							jp.joined();
-						}
-						@Override
-						public void detectionError(Data data, Exception error) {
-							jp.joined();
-						}
-						
-						@Override
-						public void detectionCancelled(Data data) {
-							jp.joined();
-						}
-					};
-					if (sp.isUnblocked()) {
-						DataFormat spec = sp.getResult();
+					if (progress != null) progress.progress(step);
+					jp.joined();
+					continue;
+				}
+				sp.listen(new Listener<DataFormat,NoException>() {
+					@Override
+					public void ready(DataFormat spec) {
 						if (spec != null) {
 							listener.formatDetected(data, spec);
 							detectSpecializations(data, spec, header, headerSize, priority, subListener, progress, step);
-							continue;
+							return;
 						}
 						if (progress != null) progress.progress(step);
 						jp.joined();
-						continue;
 					}
-					sp.listenInline(new AsyncWorkListener<DataFormat,NoException>() {
-						@Override
-						public void ready(DataFormat spec) {
-							if (spec != null) {
-								listener.formatDetected(data, spec);
-								detectSpecializations(data, spec, header, headerSize, priority, subListener, progress, step);
-								return;
-							}
-							if (progress != null) progress.progress(step);
-							jp.joined();
-						}
-						@Override
-						public void error(NoException error) {
-							jp.joined();
-						}
-						@Override
-						public void cancelled(CancelException event) {
-							jp.joined();
-						}
-					});
-				}
-				return null;
+					@Override
+					public void error(NoException error) {
+						jp.joined();
+					}
+					@Override
+					public void cancelled(CancelException event) {
+						jp.joined();
+					}
+				});
 			}
-		};
+			return null;
+		});
 		task.start();
 	}
 	

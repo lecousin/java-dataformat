@@ -12,11 +12,10 @@ import net.lecousin.dataformat.core.hierarchy.DirectoryData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -54,11 +53,11 @@ public class TarDataFormat extends ArchiveDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<TarFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<TarFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			TarFile tar = new TarFile((IO.Readable.Seekable)io, progress, work);
-			ISynchronizationPoint<IOException> sp = tar.getSynchOnReady();
-			AsyncWork<TarFile,Exception> result = new AsyncWork<>();
-			sp.listenInline(new Runnable() {
+			IAsync<IOException> sp = tar.getSynchOnReady();
+			AsyncSupplier<TarFile,Exception> result = new AsyncSupplier<>();
+			sp.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (sp.hasError()) result.error(sp.getError());
@@ -83,10 +82,10 @@ public class TarDataFormat extends ArchiveDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<TarDataFormatInfo,Exception> getInfo(Data data, byte priority) {
-		AsyncWork<TarDataFormatInfo,Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<TarFile>,Exception> get = cache.open(data, this, priority, null, 0);
-		get.listenInline(new Runnable() {
+	public AsyncSupplier<TarDataFormatInfo,Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<TarDataFormatInfo,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<TarFile>,Exception> get = cache.open(data, this, priority, null, 0);
+		get.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (get.isCancelled()) return;
@@ -98,12 +97,7 @@ public class TarDataFormat extends ArchiveDataFormat {
 				get.getResult().release(TarDataFormat.this);
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				get.unblockCancel(event);
-			}
-		});
+		sp.onCancel(get::cancel);
 		return sp;
 	}
 	
@@ -119,22 +113,23 @@ public class TarDataFormat extends ArchiveDataFormat {
 		while (tarData instanceof DirectoryData)
 			tarData = ((DirectoryData)tarData).getContainer();
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading tar content");
-		AsyncWork<CachedObject<TarFile>,Exception> getCache = cache.open(tarData, this, Task.PRIORITY_IMPORTANT, progress, 800);
+		AsyncSupplier<CachedObject<TarFile>,Exception> getCache = cache.open(tarData, this, Priority.IMPORTANT, progress, 800);
 		Data tar = tarData;
-		new Task.Cpu.FromRunnable("List zip content", Task.PRIORITY_IMPORTANT, () -> {
+		Task.cpu("List zip content", Priority.IMPORTANT, t -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());
 				progress.error(getCache.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error opening TAR file", getCache.getError());
-				return;
+				return null;
 			}
 			if (getCache.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			listSubData(tar, container, listener, getCache.getResult().get(), progress);
 			getCache.getResult().release(TarDataFormat.this);
+			return null;
 		}).startOn(getCache, true);
 		return progress;
 	}

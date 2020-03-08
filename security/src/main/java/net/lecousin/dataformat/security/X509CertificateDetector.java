@@ -44,7 +44,7 @@ public class X509CertificateDetector implements DataFormatDetector.OnlyHeaderNee
 				if ((header[2] & 0xFF) != dataSize - 3)
 					return null;
 			} else if (i == 2) {
-				i = DataUtil.readUnsignedShortBigEndian(header, 2);
+				i = DataUtil.Read16U.BE.read(header, 2);
 				if (i != dataSize - 4)
 					return null;
 			} else if (i == 3) {
@@ -52,7 +52,7 @@ public class X509CertificateDetector implements DataFormatDetector.OnlyHeaderNee
 				if (i != dataSize - 5)
 					return null;
 			} else {
-				long l = DataUtil.readUnsignedIntegerBigEndian(header, 2);
+				long l = DataUtil.Read32U.BE.read(header, 2);
 				if (l != dataSize - 6)
 					return null;
 			}

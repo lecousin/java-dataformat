@@ -5,10 +5,10 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 import net.lecousin.dataformat.archive.rar.RarArchive.RARFile;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.util.StringUtil;
+import net.lecousin.framework.text.StringUtil;
 
 class Rar15Loader extends RarLoader {
 
@@ -33,8 +33,8 @@ class Rar15Loader extends RarLoader {
 	protected void start() {
 		// read archive header block
 		headerBuffer.clear();
-		AsyncWork<Integer,IOException> readHeader = rar.io.readFullyAsync(7, headerBuffer);
-		readHeader.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> readHeader = rar.io.readFullyAsync(7, headerBuffer);
+		readHeader.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (readHeader.isCancelled()) {
@@ -64,7 +64,7 @@ class Rar15Loader extends RarLoader {
 				// TODO boolean recoveryPresent = (headerBuf[3] & 0x40) != 0;
 				// TODO boolean encryptedBlockHeaders = (headerBuf[3] & 0x80) != 0;
 				// TODO boolean isFirstVolume = (headerBuf[4] & 0x01) != 0;
-				int size = DataUtil.readUnsignedShortLittleEndian(headerBuf, 5);
+				int size = DataUtil.Read16U.LE.read(headerBuf, 5);
 				if (progress != null) progress.progress(work/10);
 				readNextBlock(7+size, progress, work-work/10);
 			}
@@ -73,8 +73,8 @@ class Rar15Loader extends RarLoader {
 	
 	private void readNextBlock(long pos, WorkProgress progress, long work) {
 		headerBuffer.clear();
-		AsyncWork<Integer,IOException> readHeader = rar.io.readFullyAsync(pos, headerBuffer);
-		readHeader.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> readHeader = rar.io.readFullyAsync(pos, headerBuffer);
+		readHeader.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (readHeader.isCancelled()) {
@@ -128,13 +128,13 @@ class Rar15Loader extends RarLoader {
 	}
 	
 	private void goToNextHeader(long pos, WorkProgress progress, long work) {
-		int headSize = DataUtil.readUnsignedShortLittleEndian(headerBuf, 5);
+		int headSize = DataUtil.Read16U.LE.read(headerBuf, 5);
 		if ((headerBuf[4] & 0x80) != 0) {
 			// ADD_SIZE
 			headerBuffer.clear();
 			headerBuffer.limit(4);
-			AsyncWork<Integer,IOException> read2 = rar.io.readFullyAsync(pos+7, headerBuffer);
-			read2.listenInline(new Runnable() {
+			AsyncSupplier<Integer,IOException> read2 = rar.io.readFullyAsync(pos+7, headerBuffer);
+			read2.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (read2.isCancelled()) {
@@ -151,7 +151,7 @@ class Rar15Loader extends RarLoader {
 						rar.contentLoaded.error(new IOException("Invalid RAR Archive: block header is truncated"));
 						return;
 					}
-					long size = headSize + DataUtil.readUnsignedIntegerLittleEndian(headerBuf, 0);
+					long size = headSize + DataUtil.Read32U.LE.read(headerBuf, 0);
 					if (progress != null) progress.progress(work/10);
 					readNextBlock(pos + size, progress, work-work/10);
 				}
@@ -165,8 +165,8 @@ class Rar15Loader extends RarLoader {
 	
 	private void readFileHeader(long pos, WorkProgress progress, long work) {
 		buffer.clear();
-		AsyncWork<Integer,IOException> read = rar.io.readFullyAsync(pos, buffer);
-		read.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> read = rar.io.readFullyAsync(pos, buffer);
+		read.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (read.isCancelled()) {
@@ -184,10 +184,10 @@ class Rar15Loader extends RarLoader {
 					return;
 				}
 				RARFile file = rar.new RARFile();
-				file.compressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-				file.uncompressedSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 4);
+				file.compressedSize = DataUtil.Read32U.LE.read(buf, 0);
+				file.uncompressedSize = DataUtil.Read32U.LE.read(buf, 4);
 				file.method = buf[18];
-				int name_len = DataUtil.readUnsignedShortLittleEndian(buf, 19);
+				int name_len = DataUtil.Read16U.LE.read(buf, 19);
 				int add_size = 0;
 				if ((headerBuf[4] & 0x01) != 0) {
 					add_size += 8; // 64-bit sizes
@@ -197,8 +197,8 @@ class Rar15Loader extends RarLoader {
 				}
 				// TODO extended time ????? variable length ???
 				byte[] b = new byte[name_len+add_size];
-				AsyncWork<Integer, IOException> read2 = rar.io.readFullyAsync(pos+25, ByteBuffer.wrap(b));
-				read2.listenInline(new Runnable() {
+				AsyncSupplier<Integer, IOException> read2 = rar.io.readFullyAsync(pos+25, ByteBuffer.wrap(b));
+				read2.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (read2.isCancelled()) {
@@ -217,9 +217,9 @@ class Rar15Loader extends RarLoader {
 						}
 						int i = 0;
 						if ((headerBuf[4] & 0x01) != 0) {
-							long l = DataUtil.readUnsignedIntegerLittleEndian(b, 0);
+							long l = DataUtil.Read32U.LE.read(b, 0);
 							file.compressedSize += (l << 32);
-							l = DataUtil.readUnsignedIntegerLittleEndian(b, 4);
+							l = DataUtil.Read32U.LE.read(b, 4);
 							file.uncompressedSize += (l << 32);
 							i += 8;
 						}

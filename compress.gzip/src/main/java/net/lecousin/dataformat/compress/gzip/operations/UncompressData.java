@@ -9,7 +9,8 @@ import net.lecousin.dataformat.compress.gzip.GZipDataFormat;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.operations.DataToDataOperation;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -43,15 +44,15 @@ public class UncompressData implements DataToDataOperation.OneToOne<GZipDataForm
 	public GZipDataFormat getOutputFormat() { return GZipDataFormat.instance; }
 
 	@Override
-	public AsyncWork<Void, ? extends Exception> execute(Data input, Pair<Data, IO.Writable> output, Void params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Void, Exception> result = new AsyncWork<>();
-		input.openReadOnly(priority).listenInline((inp) -> {
+	public AsyncSupplier<Void, ? extends Exception> execute(Data input, Pair<Data, IO.Writable> output, Void params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Void, IOException> result = new AsyncSupplier<>();
+		input.openReadOnly(priority).onDone((inp) -> {
 			@SuppressWarnings("resource")
 			GZipReadable in = new GZipReadable(inp, priority);
 			@SuppressWarnings("resource")
 			IO.Writable out = output.getValue2();
-			AsyncWork<Long, IOException> copy = IOUtil.copy(in, out, -1, false, progress, work);
-			copy.listenInline(() -> {
+			AsyncSupplier<Long, IOException> copy = IOUtil.copy(in, out, -1, false, progress, work);
+			copy.onDone(() -> {
 				in.closeAsync();
 				if (copy.hasError()) {
 					result.error(copy.getError());

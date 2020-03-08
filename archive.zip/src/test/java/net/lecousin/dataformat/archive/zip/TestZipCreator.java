@@ -6,8 +6,8 @@ import net.lecousin.framework.application.Application;
 import net.lecousin.framework.application.Artifact;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.application.Version;
-import net.lecousin.framework.concurrent.Task;
 import net.lecousin.framework.concurrent.tasks.drives.DirectoryReader;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.io.util.FileInfo;
 import net.lecousin.framework.util.DirectoryWalker;
 import net.lecousin.framework.util.Pair;
@@ -30,7 +30,7 @@ public class TestZipCreator {
 		//File dir = new File("D:\\tmp\\test_backups\\src1");
 		//File dir = new File("D:\\tmp\\test_backups\\test2");
 		ZipCreator zip;
-		try { zip = new ZipCreator(zipFile, Task.PRIORITY_RATHER_IMPORTANT, 256*1024*1024); }
+		try { zip = new ZipCreator(zipFile, Task.Priority.RATHER_IMPORTANT, 256*1024*1024); }
 		catch (Exception e) {
 			e.printStackTrace(System.err);
 			return;
@@ -45,7 +45,7 @@ public class TestZipCreator {
 			protected void fileFound(String parent, FileInfo file, String path) {
 				zip.add(file.file, path);
 			}
-		}.start(Task.PRIORITY_NORMAL, null, 0).listenInline(new Runnable() {
+		}.start(Task.Priority.NORMAL, null, 0).onDone(new Runnable() {
 			@Override
 			public void run() {
 				System.out.println("End of walk");

@@ -1,12 +1,14 @@
 package net.lecousin.dataformat.core.operations;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import java.util.function.Supplier;
+
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.mutable.MutableBoolean;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.Provider;
 
 /**
  * Operation from one object type to another.
@@ -16,7 +18,7 @@ import net.lecousin.framework.util.Provider;
 public interface Operation<Input,Output,Parameters> extends IOperation<Parameters>, IOperation.FromObject<Input>, IOperation.ToObject<Output> {
 
 	public static interface OneToOne<Input,Output,Parameters> extends Operation<Input,Output,Parameters>, IOperation.OneToOne {
-		public AsyncWork<Pair<Output,Object>,? extends Exception> execute(Input input, Parameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Pair<Output,Object>,? extends Exception> execute(Input input, Parameters params, Priority priority, WorkProgress progress, long work);
 		public void release(Pair<Output,Object> output);
 	}
 	
@@ -28,7 +30,7 @@ public interface Operation<Input,Output,Parameters> extends IOperation<Parameter
 		 * Start the operation, which will call the inputProvider each time it needs a new input.
 		 * The inputProvider must return an AsyncWork with a null result when no more input is available and the operation should end.
 		 */
-		public AsyncWork<Pair<Output,Object>, ? extends Exception> startOperation(Provider<AsyncWork<Input,? extends Exception>> inputProvider, int nbInputs, Parameters params, byte priority, WorkProgress progress, long work);
+		public AsyncSupplier<Pair<Output,Object>, ? extends Exception> startOperation(Supplier<AsyncSupplier<Input,? extends Exception>> inputProvider, int nbInputs, Parameters params, Priority priority, WorkProgress progress, long work);
 		public void release(Pair<Output,Object> output);
 	}
 	
@@ -71,15 +73,15 @@ public interface Operation<Input,Output,Parameters> extends IOperation<Parameter
 		}
 		@SuppressWarnings("unchecked")
 		@Override
-		public AsyncWork execute(Object input, Object params, byte priority, WorkProgress progress, long work) {
+		public AsyncSupplier execute(Object input, Object params, Priority priority, WorkProgress progress, long work) {
 			MutableBoolean inputGiven = new MutableBoolean(false);
-			Provider<AsyncWork> inputProvider = new Provider<AsyncWork>() {
+			Supplier<AsyncSupplier> inputProvider = new Supplier<AsyncSupplier>() {
 				@Override
-				public AsyncWork provide() {
+				public AsyncSupplier get() {
 					if (inputGiven.get())
-						return new AsyncWork(null, null);
+						return new AsyncSupplier(null, null);
 					inputGiven.set(true);
-					return new AsyncWork(input, null);
+					return new AsyncSupplier(input, null);
 				}
 			};
 			return op.startOperation(inputProvider, 1, params, priority, progress, work);

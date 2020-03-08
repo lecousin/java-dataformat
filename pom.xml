@@ -7,7 +7,7 @@
   <parent>
   	<groupId>net.lecousin</groupId>
   	<artifactId>parent-pom</artifactId>
-  	<version>0.8</version>
+  	<version>20191012.2</version>
   </parent>
   <modules>
     <module>core</module>
@@ -70,18 +70,29 @@
     </plugins>
   </build>
   
+  <properties>
+  	<lc.core.version>0.20.3</lc.core.version>
+    <log.bridges.version>0.19.0</log.bridges.version>
+    <serialization.version>0.3.0</serialization.version>
+  </properties>
+  
   <dependencyManagement>
   	<dependencies>
 	  	<dependency>
 	  		<groupId>net.lecousin</groupId>
 	  		<artifactId>core</artifactId>
-	  		<version>0.15.0</version>
+	  		<version>${lc.core.version}</version>
 	  	</dependency>
 	  	<dependency>
 	  		<groupId>net.lecousin.framework</groupId>
 	  		<artifactId>ui-description</artifactId>
 	  		<version>0.1.0</version>
 	  	</dependency>
+      <dependency>
+        <groupId>net.lecousin.framework</groupId>
+        <artifactId>xml</artifactId>
+        <version>${serialization.version}</version>
+      </dependency>
   	</dependencies>
   </dependencyManagement>
   

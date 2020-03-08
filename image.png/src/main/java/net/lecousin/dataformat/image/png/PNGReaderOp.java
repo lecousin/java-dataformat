@@ -1,14 +1,16 @@
 package net.lecousin.dataformat.image.png;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.image.ImageDataFormat;
 import net.lecousin.dataformat.image.png.io.PNGReader;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -49,10 +51,10 @@ public class PNGReaderOp implements DataFormatReadOperation.OneToOne<PNGDataForm
 	}
 	
 	@Override
-	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
-		AsyncWork<Pair<BufferedImage,Object>,Exception> sp = new AsyncWork<>();
-		open.listenInline(new Runnable() {
+	public AsyncSupplier<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<? extends IO.Readable.Seekable, IOException> open = data.openReadOnly(priority);
+		AsyncSupplier<Pair<BufferedImage,Object>,Exception> sp = new AsyncSupplier<>();
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (!open.isSuccessful()) {
@@ -61,7 +63,7 @@ public class PNGReaderOp implements DataFormatReadOperation.OneToOne<PNGDataForm
 				} else {
 					if (progress != null) progress.progress(work/4);
 					try {
-						PNGReader.readFromSeekable((IO.Readable.Seekable&IO.KnownSize)open.getResult()).listenInline(new AsyncWorkListener<BufferedImage, Exception>() {
+						PNGReader.readFromSeekable((IO.Readable.Seekable&IO.KnownSize)open.getResult()).listen(new Listener<BufferedImage, Exception>() {
 							@Override
 							public void ready(BufferedImage result) {
 								sp.unblockSuccess(new Pair<>(result, null));

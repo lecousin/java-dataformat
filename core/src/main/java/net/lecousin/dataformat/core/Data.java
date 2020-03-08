@@ -10,11 +10,11 @@ import java.util.Map;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.MutualExclusion;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.async.MutualExclusion;
 import net.lecousin.framework.event.SingleEvent;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
@@ -52,11 +52,11 @@ public abstract class Data {
 	 * The goal here is to provide most convenient way of accessing the data content
 	 */
 	
-	private AsyncWork<Void, Exception> ioLoading = null;
+	private AsyncSupplier<Void, IOException> ioLoading = null;
 	private IO.Readable io = null;
 	private int ioUsage = 0;
 	private Task<Void,NoException> closeIO = null;
-	private AsyncWork<? extends IO, ? extends Exception> rwIO = null;
+	private AsyncSupplier<? extends IO, ? extends Exception> rwIO = null;
 	private MutualExclusion<NoException> ioMutex = new MutualExclusion<>();
 	
 	public void forceCloseIOReadOnly() {
@@ -79,7 +79,7 @@ public abstract class Data {
 		}
 	}
 	
-	private AsyncWork<Void, Exception> prepareIOReadOnly(byte priority) {
+	private AsyncSupplier<Void, IOException> prepareIOReadOnly(Priority priority) {
 		ioMutex.lock();
 		try {
 			if (closeIO != null) {
@@ -87,19 +87,19 @@ public abstract class Data {
 				closeIO = null;
 			}
 			if (io != null) {
-				if (io.getPriority() > priority)
+				if (io.getPriority().getValue() > priority.getValue())
 					io.setPriority(priority);
 				ioUsage++;
-				return new AsyncWork<>(null, null);
+				return new AsyncSupplier<>(null, null);
 			}
 			if (ioLoading == null) {
 				// first usage
-				AsyncWork<IO.Readable,? extends Exception> originalIO = openIOReadOnly(priority);
+				AsyncSupplier<IO.Readable,IOException> originalIO = openIOReadOnly(priority);
 				if (originalIO == null)
-					return new AsyncWork<>(null,null);
-				ioLoading = new AsyncWork<Void, Exception>();
+					return new AsyncSupplier<>(null,null);
+				ioLoading = new AsyncSupplier<>();
 				ioLoading.onCancel((cancel) -> { originalIO.unblockCancel(cancel); });
-				originalIO.listenAsync(new Task.Cpu.FromRunnable("Open data IO", priority, () -> {
+				originalIO.thenStart("Open data IO", priority, () -> {
 					ioMutex.lock();
 					try {
 						if (originalIO.isCancelled() || ioLoading == null)
@@ -134,10 +134,10 @@ public abstract class Data {
 					} finally {
 						ioMutex.unlock();
 					}
-				}), true);
+				}, true);
 			}
 			ioUsage++;
-			AsyncWork<Void,Exception> sp = new AsyncWork<>();
+			AsyncSupplier<Void,IOException> sp = new AsyncSupplier<>();
 			sp.onCancel((event) -> {
 				// caller requested to cancel
 				ioMutex.lock();
@@ -158,14 +158,14 @@ public abstract class Data {
 					ioMutex.unlock();
 				}
 			});
-			ioLoading.listenInline(new AsyncWorkListener<Void, Exception>() {
+			ioLoading.listen(new Listener<Void, IOException>() {
 				@Override
 				public void ready(Void result) {
 					sp.unblockSuccess(null);
 					ioLoading = null;
 				}
 				@Override
-				public void error(Exception error) {
+				public void error(IOException error) {
 					sp.unblockError(error);
 					ioLoading = null;
 				}
@@ -185,22 +185,19 @@ public abstract class Data {
 			ioUsage--;
 			if (ioUsage == 0) {
 				ioLoading = null;
-				closeIO = new Task.Cpu<Void,NoException>("Closing data IO", Task.PRIORITY_RATHER_LOW) {
-					@Override
-					public Void run() {
-						ioMutex.lock();
-						try {
-							if (!isCancelled() && ioUsage == 0) {
-								try { io.close(); } catch (Throwable t) { /* ignore */ }
-								io = null;
-							}
-							closeIO = null;
-						} finally {
-							ioMutex.unlock();
+				closeIO = Task.cpu("Close data IO", Task.Priority.RATHER_LOW, task -> {
+					ioMutex.lock();
+					try {
+						if (!task.isCancelled() && ioUsage == 0) {
+							try { io.close(); } catch (Throwable t) { /* ignore */ }
+							io = null;
 						}
-						return null;
+						closeIO = null;
+					} finally {
+						ioMutex.unlock();
 					}
-				};
+					return null;
+				});
 				closeIO.executeIn(5000);
 				closeIO.start();
 			}
@@ -209,12 +206,12 @@ public abstract class Data {
 		}
 	}
 	
-	public <T extends IO.Readable.Seekable&IO.Readable.Buffered&IO.KnownSize> AsyncWork<T,Exception> openReadOnly(byte priority) {
+	public <T extends IO.Readable.Seekable&IO.Readable.Buffered&IO.KnownSize> AsyncSupplier<T,IOException> openReadOnly(Priority priority) {
 		if (rwIO != null)
-			return new AsyncWork<>(null, new Exception("Data already open for modification"));
-		AsyncWork<Void, Exception> prepare = prepareIOReadOnly(priority);
-		AsyncWork<T,Exception> sp = new AsyncWork<>();
-		prepare.listenInline(new Runnable() {
+			return new AsyncSupplier<>(null, new IOException("Data already open for modification"));
+		AsyncSupplier<Void, IOException> prepare = prepareIOReadOnly(priority);
+		AsyncSupplier<T,IOException> sp = new AsyncSupplier<>();
+		prepare.onDone(new Runnable() {
 			@SuppressWarnings("unchecked")
 			@Override
 			public void run() {
@@ -242,8 +239,8 @@ public abstract class Data {
 					});
 					sp.unblockSuccess((T)wrap);
 				} else {
-					AsyncWork<Long, IOException> getSize = ((IO.KnownSize)io).getSizeAsync();
-					getSize.listenAsync(new Task.Cpu.FromRunnable("Open Data IO", priority, () -> {
+					AsyncSupplier<Long, IOException> getSize = ((IO.KnownSize)io).getSizeAsync();
+					getSize.thenStart("Open Data IO", priority, () -> {
 						if (!getSize.isSuccessful()) {
 							releaseIOReadOnly();
 							if (getSize.hasError())
@@ -254,37 +251,27 @@ public abstract class Data {
 						}
 						@SuppressWarnings("resource")
 						SubIO.Readable.Seekable.Buffered wrap = new SubIO.Readable.Seekable.Buffered((IO.Readable.Seekable & IO.Readable.Buffered)io, 0, getSize.getResult().longValue(), io.getSourceDescription(), false);
-						wrap.addCloseListener(new Runnable() {
-							@Override
-							public void run() {
-								releaseIOReadOnly();
-							}
-						});
+						wrap.addCloseListener(() -> releaseIOReadOnly());
 						sp.unblockSuccess((T)wrap);
-					}), true);
+					}, true);
 				}
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				prepare.unblockCancel(event);
-			}
-		});
+		sp.onCancel(prepare::unblockCancel);
 		return sp;
 	}
 	
-	public <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openReadWrite(byte priority) {
+	public <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openReadWrite(Priority priority) {
 		ioMutex.lock();
 		try {
 			if (rwIO != null)
-				return new AsyncWork<>(null, new Exception("Data already open for modification"));
+				return new AsyncSupplier<>(null, new IOException("Data already open for modification"));
 			if (!canOpenReadWrite())
-				return new AsyncWork<>(null, new Exception("Modification not supported"));
+				return new AsyncSupplier<>(null, new IOException("Modification not supported"));
 			forceCloseIOReadOnly();
-			AsyncWork<T, ? extends Exception> open = openIOReadWrite(priority);
+			AsyncSupplier<T, IOException> open = openIOReadWrite(priority);
 			rwIO = open;
-			rwIO.listenInline(() -> {
+			rwIO.onDone(() -> {
 				if (!open.isSuccessful())
 					rwIO = null;
 				else
@@ -296,10 +283,10 @@ public abstract class Data {
 		}
 	}
 	
-	protected abstract AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority);
+	protected abstract AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority);
 	
 	protected abstract boolean canOpenReadWrite();
-	protected abstract <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority);
+	protected abstract <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority);
 	
 	/* *************************************************************************** */
 	/* Properties and cached data */
@@ -343,7 +330,7 @@ public abstract class Data {
 	public void releaseEverything() {
 		forceCloseIOReadOnly();
 		if (rwIO != null) {
-			if (!rwIO.isUnblocked())
+			if (!rwIO.isDone())
 				rwIO.cancel(new CancelException("Data.releaseEverything called"));
 			else if (rwIO.isSuccessful())
 				try { rwIO.getResult().close(); }
@@ -364,18 +351,18 @@ public abstract class Data {
 	private MutualExclusion<NoException> detectionMutex = new MutualExclusion<>();
 	
 	private class Detection {
-		private AsyncWork<? extends IO.Readable,Exception> open;
-		private AsyncWork<DataFormat,IOException> detectTask;
+		private AsyncSupplier<? extends IO.Readable,IOException> open;
+		private AsyncSupplier<DataFormat,IOException> detectTask;
 		private static final long PROGRESS_AMOUNT = 1000;
 		private static final long STEP_OPEN = 2;
 		private static final long STEP_DETECT = 700;
 		private static final long STEP_SPE = 298;
 		private WorkProgressImpl progress = new WorkProgressImpl(PROGRESS_AMOUNT);
-		public void run(byte priority) {
+		public void run(Priority priority) {
 			open = openReadOnly(priority);
 			byte[] header = new byte[512];
 			MutableInteger headerSize = new MutableInteger(0);
-			open.listenInline(new Runnable() {
+			open.onDone(new Runnable() {
 				@SuppressWarnings("resource")
 				@Override
 				public void run() {
@@ -412,7 +399,7 @@ public abstract class Data {
 						detectionMutex.unlock();
 					}
 					Logger logger = getLogger();
-					detectTask.listenInline(new Runnable() {
+					detectTask.onDone(new Runnable() {
 						@Override
 						public void run() {
 							detectionMutex.lock();
@@ -498,7 +485,7 @@ public abstract class Data {
 		}
 	}
 
-	public void detect(byte priority, WorkProgress progress, long work, DataFormatListener listener, SingleEvent<Void> cancel) {
+	public void detect(Priority priority, WorkProgress progress, long work, DataFormatListener listener, SingleEvent<Void> cancel) {
 		detectionMutex.lock();
 		try {
 			if (formatError != null) {
@@ -537,30 +524,27 @@ public abstract class Data {
 					WorkProgress.link(detection.progress, progress, work);
 				detection.run(priority); // TODO be able to change priority when already running
 			}
-			cancel.listen(new Listener<Void>() {
-				@Override
-				public void fire(Void event) {
-					Task<?,?> previous = null;
-					detectionMutex.lock();
-					try {
-						if (formatListeners == null) return;
-						for (Iterator<Pair<DataFormatListener, Task<?,?>>> it = formatListeners.iterator(); it.hasNext(); ) {
-							Pair<DataFormatListener, Task<?,?>> p = it.next();
-							if (p.getValue1() == listener) {
-								it.remove();
-								previous = p.getValue2();
-								break;
-							}
+			cancel.listen(event -> {
+				Task<?,?> previous = null;
+				detectionMutex.lock();
+				try {
+					if (formatListeners == null) return;
+					for (Iterator<Pair<DataFormatListener, Task<?,?>>> it = formatListeners.iterator(); it.hasNext(); ) {
+						Pair<DataFormatListener, Task<?,?>> p = it.next();
+						if (p.getValue1() == listener) {
+							it.remove();
+							previous = p.getValue2();
+							break;
 						}
-						if (formatListeners.isEmpty()) {
-							detection.cancel();
-							detection = null;
-						}
-					} finally {
-						detectionMutex.unlock();
 					}
-					callDetectionCancelled(listener, previous);
+					if (formatListeners.isEmpty()) {
+						detection.cancel();
+						detection = null;
+					}
+				} finally {
+					detectionMutex.unlock();
 				}
+				callDetectionCancelled(listener, previous);
 			});
 		} finally {
 			detectionMutex.unlock();
@@ -568,32 +552,36 @@ public abstract class Data {
 	}
 	
 	private void callDetectionError(DataFormatListener listener, Exception error, Task<?,?> previous) {
-		Task<?,?> task = new Task.Cpu.FromRunnable("Call DataDormatListener.detectionError", Task.PRIORITY_NORMAL, () -> {
+		Task<?,?> task = Task.cpu("Call DataDormatListener.detectionError", Priority.NORMAL, t -> {
 			listener.detectionError(Data.this, error);
+			return null;
 		});
-		task.startOnDone(previous);
+		task.startAfter(previous);
 	}
 
 	private void callDetectionCancelled(DataFormatListener listener, Task<?,?> previous) {
-		Task<?,?> task = new Task.Cpu.FromRunnable("Call DataDormatListener.detectionCancelled", Task.PRIORITY_NORMAL, () -> {
+		Task<?,?> task = Task.cpu("Call DataDormatListener.detectionCancelled", Priority.NORMAL, t -> {
 			listener.detectionCancelled(Data.this);
+			return null;
 		});
-		task.startOnDone(previous);
+		task.startAfter(previous);
 	}
 	
 	private Task<?,?> callFormatDetected(DataFormatListener listener, DataFormat format, Task<?,?> previous) {
-		Task<Void, NoException> task = new Task.Cpu.FromRunnable("Call DataFormatListener.formatDetected", Task.PRIORITY_NORMAL, () -> {
+		Task<Void, NoException> task = Task.cpu("Call DataFormatListener.formatDetected", Priority.NORMAL, t -> {
 			listener.formatDetected(Data.this, format);
+			return null;
 		});
-		task.startOnDone(previous);
+		task.startAfter(previous);
 		return task;
 	}
 	
 	private void callEndOfDetection(DataFormatListener listener, Task<?,?> previous) {
-		Task<Void, NoException> task = new Task.Cpu.FromRunnable("Call DataFormatListener.endOfDetection", Task.PRIORITY_NORMAL, () -> {
+		Task<Void, NoException> task = Task.cpu("Call DataFormatListener.endOfDetection", Priority.NORMAL, t -> {
 			listener.endOfDetection(Data.this);
+			return null;
 		});
-		task.startOnDone(previous);
+		task.startAfter(previous);
 	}
 	
 	public DataFormat getDetectedFormat() {
@@ -644,21 +632,21 @@ public abstract class Data {
 		}
 	}
 	
-	public AsyncWork<DataFormat, Exception> detectFinalFormat(byte priority, WorkProgress progress, long work) {
+	public AsyncSupplier<DataFormat, Exception> detectFinalFormat(Priority priority, WorkProgress progress, long work) {
 		detectionMutex.lock();
 		try {
 			if (formatError != null) {
 				if (progress != null) progress.error(formatError);
-				return new AsyncWork<>(null, formatError);
+				return new AsyncSupplier<>(null, formatError);
 			}
 			if (formats != null && formatListeners == null) {
 				if (progress != null) progress.progress(work);
-				return new AsyncWork<>(getDetectedFormat(), null);
+				return new AsyncSupplier<>(getDetectedFormat(), null);
 			}
 		} finally {
 			detectionMutex.unlock();
 		}
-		AsyncWork<DataFormat, Exception> result = new AsyncWork<>();
+		AsyncSupplier<DataFormat, Exception> result = new AsyncSupplier<>();
 		SingleEvent<Void> cancel = new SingleEvent<>();
 		detect(priority, progress, work, new DataFormatListener() {
 			@Override
@@ -683,7 +671,7 @@ public abstract class Data {
 	
 	/** Must be used only in a situation asynchronous detection cannot be used. */
 	public DataFormat detectFormatSync() {
-		AsyncWork<DataFormat, Exception> f = detectFinalFormat(Task.PRIORITY_URGENT, null, 0);
+		AsyncSupplier<DataFormat, Exception> f = detectFinalFormat(Priority.URGENT, null, 0);
 		try {
 			return f.blockResult(0);
 		} catch (Throwable t) {

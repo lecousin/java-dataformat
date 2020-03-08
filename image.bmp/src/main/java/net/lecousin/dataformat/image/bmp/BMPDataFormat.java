@@ -1,13 +1,14 @@
 package net.lecousin.dataformat.image.bmp;
 
-import org.apache.commons.logging.Log;
-import org.apache.commons.logging.LogFactory;
-
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.image.ImageDataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 
 public class BMPDataFormat extends ImageDataFormat {
 
@@ -45,7 +46,7 @@ public class BMPDataFormat extends ImageDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<DIBInfo, Exception> getInfo(Data data, byte priority) {
+	public AsyncSupplier<DIBInfo, Exception> getInfo(Data data, Priority priority) {
 		return DIBInfo.load(data, priority, 14);
 	}
 	

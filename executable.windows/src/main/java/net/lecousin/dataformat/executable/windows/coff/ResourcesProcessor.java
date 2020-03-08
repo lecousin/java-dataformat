@@ -1,10 +1,12 @@
 package net.lecousin.dataformat.executable.windows.coff;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
@@ -12,9 +14,8 @@ import net.lecousin.dataformat.core.FragmentedSubData;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.image.bmp.DIBReaderOp.DIBImageProvider;
 import net.lecousin.dataformat.image.ico.ICOCURFormat.ICOImageProvider;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -39,36 +40,36 @@ public class ResourcesProcessor {
 		processMap(map, list);
 	}
 	
-	private static class DataTypeSetter implements Listener<Data> {
+	private static class DataTypeSetter implements Consumer<Data> {
 		public DataTypeSetter(DataFormat format) {
 			this.format = format;
 		}
 		private DataFormat format;
 		@Override
-		public void fire(Data data) {
+		public void accept(Data data) {
 			data.setFormat(format);
 		}
 	}
 	
-	private static class ICOReaderSetter implements Listener<Data> {
+	private static class ICOReaderSetter implements Consumer<Data> {
 		@Override
-		public void fire(Data data) {
+		public void accept(Data data) {
 			if (!data.hasProperty(DIBImageProvider.DATA_PROPERTY))
 				data.setProperty(DIBImageProvider.DATA_PROPERTY, new ICOImageProvider(-1));
 		}
 	}
 	
 	@SuppressWarnings("unchecked")
-	private static void processType(Object type, Map<Object,Object> map, Listener<Data> listener) {
+	private static void processType(Object type, Map<Object,Object> map, Consumer<Data> listener) {
 		Object o = map.get(type);
 		if (o == null) return;
 		if (!(o instanceof Map)) return;
 		processTypeMap((Map<Object,Object>)o, listener);
 	}
 	@SuppressWarnings("unchecked")
-	private static void processTypeMap(Map<Object,Object> map, Listener<Data> listener) {
+	private static void processTypeMap(Map<Object,Object> map, Consumer<Data> listener) {
 		for (Object o : map.values()) {
-			if (o instanceof Data) listener.fire((Data)o);
+			if (o instanceof Data) listener.accept((Data)o);
 			else if (o instanceof Map) processTypeMap((Map<Object,Object>)o, listener);
 		}
 	}
@@ -96,17 +97,17 @@ public class ResourcesProcessor {
 						Object gi = e2.getValue();
 						if (gi instanceof SubData) {
 							SubData gi_data = (SubData)gi;
-							AsyncWork<? extends IO.Readable.Seekable,Exception> open = gi_data.openReadOnly(Task.PRIORITY_NORMAL);
+							AsyncSupplier<? extends IO.Readable.Seekable,IOException> open = gi_data.openReadOnly(Priority.NORMAL);
 							@SuppressWarnings("resource")
 							IO.Readable.Seekable io = open.blockResult(0);
 							try {
 								io.readFullySync(0, ByteBuffer.wrap(file_header,0,6));
-								int nb_ico = DataUtil.readUnsignedShortLittleEndian(file_header, 4);
+								int nb_ico = DataUtil.Read16U.LE.read(file_header, 4);
 								List<Pair<byte[],SubData>> found_icons = new LinkedList<Pair<byte[],SubData>>();
 								for (int i = 0; i < nb_ico; ++i) {
 									byte[] ico_header = new byte[16];
 									io.readFullySync(6+i*14, ByteBuffer.wrap(ico_header, 0, 14));
-									int icon_id = DataUtil.readUnsignedShortLittleEndian(ico_header, 12);
+									int icon_id = DataUtil.Read16U.LE.read(ico_header, 12);
 									Object ico_map = ((Map<Object,Object>)icons).get(new Integer(icon_id));
 									if (ico_map instanceof Map) {
 										Object ico_obj = ((Map<Object,Object>)ico_map).get(lang);
@@ -119,14 +120,14 @@ public class ResourcesProcessor {
 								if (!found_icons.isEmpty()) {
 									byte[] buffer = new byte[6+found_icons.size()*16];
 									System.arraycopy(file_header, 0, buffer, 0, 4);
-									DataUtil.writeShortLittleEndian(buffer, 4, (short)found_icons.size());
+									DataUtil.Write16.LE.write(buffer, 4, (short)found_icons.size());
 									long pos_data = 6+found_icons.size()*16;
 									int pos_header = 6;
 									for (Pair<byte[],SubData> ico : found_icons) {
 										byte[] ico_header = ico.getValue1();
 										SubData ico_data = ico.getValue2();
 										System.arraycopy(ico_header, 0, buffer, pos_header, 12);
-										DataUtil.writeIntegerLittleEndian(buffer, pos_header+12, (int)pos_data);
+										DataUtil.Write32.LE.write(buffer, pos_header+12, (int)pos_data);
 										pos_header += 16;
 										pos_data += ico_data.getSize();
 									}

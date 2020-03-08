@@ -3,7 +3,8 @@ package net.lecousin.dataformat.microsoft.dev;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.microsoft.MicrosoftAbstractDataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 
@@ -31,7 +32,7 @@ public class MSFTDataFormat extends MicrosoftAbstractDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		return null;
 	}
 	

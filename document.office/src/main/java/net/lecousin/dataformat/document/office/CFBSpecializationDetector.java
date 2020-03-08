@@ -6,8 +6,9 @@ import net.lecousin.dataformat.archive.cfb.CFBFile.CFBSubFile;
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.memory.CachedObject;
 
@@ -30,41 +31,38 @@ public class CFBSpecializationDetector implements DataFormatSpecializationDetect
 	}
 	
 	@Override
-	public AsyncWork<DataFormat,NoException> detectSpecialization(Data data, byte priority, byte[] header, int headerSize) {
-		AsyncWork<CachedObject<CFBFile>,Exception> cfb = CFBDataFormat.cache.open(data, this, priority/*, true*/, null, 0);
-		AsyncWork<DataFormat,NoException> sp = new AsyncWork<>();
-		Task<DataFormat,NoException> task = new Task.Cpu<DataFormat,NoException>("Detect MS Office format in CFB", priority) {
-			@Override
-			public DataFormat run() {
-				if (!cfb.isSuccessful()) {
-					getApplication().getDefaultLogger().error("Error opening CFB file", cfb.getError());
-					return null;
-				}
-				try {
-					for (CFBSubFile file : cfb.getResult().get().getContent()) {
-						String name = file.getName();
-						if ("WordDocument".equals(name))
-							return WordFile_CFB_DataFormat.instance;
-						if ("Workbook".equals(name))
-							return ExcelFile_CFB_BIFF8_DataFormat.instance;
-						if ("Book".equals(name))
-							return ExcelFile_CFB_BIFF5_7_DataFormat.instance;
-						if ("PowerPoint Document".equals(name))
-							return PowerPointFile_CFB_DataFormat.instance;
-						if ("VisioDocument".equals(name))
-							return VisioFile_CFB_DataFormat.instance;
-					}
-					return null;
-				} finally {
-					cfb.getResult().release(CFBSpecializationDetector.this);
-				}
+	public AsyncSupplier<DataFormat,NoException> detectSpecialization(Data data, Priority priority, byte[] header, int headerSize) {
+		AsyncSupplier<CachedObject<CFBFile>,Exception> cfb = CFBDataFormat.cache.open(data, this, priority/*, true*/, null, 0);
+		AsyncSupplier<DataFormat,NoException> sp = new AsyncSupplier<>();
+		Task<DataFormat,NoException> task = Task.cpu("Detect MS Office format in CFB", priority, t -> {
+			if (!cfb.isSuccessful()) {
+				t.getApplication().getDefaultLogger().error("Error opening CFB file", cfb.getError());
+				return null;
 			}
-		};
+			try {
+				for (CFBSubFile file : cfb.getResult().get().getContent()) {
+					String name = file.getName();
+					if ("WordDocument".equals(name))
+						return WordFile_CFB_DataFormat.instance;
+					if ("Workbook".equals(name))
+						return ExcelFile_CFB_BIFF8_DataFormat.instance;
+					if ("Book".equals(name))
+						return ExcelFile_CFB_BIFF5_7_DataFormat.instance;
+					if ("PowerPoint Document".equals(name))
+						return PowerPointFile_CFB_DataFormat.instance;
+					if ("VisioDocument".equals(name))
+						return VisioFile_CFB_DataFormat.instance;
+				}
+				return null;
+			} finally {
+				cfb.getResult().release(CFBSpecializationDetector.this);
+			}
+		});
 		task.startOn(cfb, true);
-		task.getOutput().listenInline(new Runnable() {
+		task.getOutput().onDone(new Runnable() {
 			@Override
 			public void run() {
-				sp.unblockSuccess(task.getResult());
+				sp.unblockSuccess(task.getOutput().getResult());
 			}
 		});
 		return sp;

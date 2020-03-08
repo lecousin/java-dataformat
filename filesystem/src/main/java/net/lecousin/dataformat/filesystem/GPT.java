@@ -5,8 +5,7 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 import net.lecousin.framework.collections.ArrayUtil;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.progress.WorkProgress;
@@ -63,9 +62,9 @@ public class GPT {
 	
 	private void loadHeader(IO.Readable.Seekable io, long pos, WorkProgress progress, long work) {
 		byte[] buf = new byte[0x80];
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 0x5C));
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 0x5C));
 		header = new Header();
-		read.listenAsync(new Task.Cpu.FromRunnable("Read EFI Part header", io.getPriority(), () -> {
+		read.thenStart("Read EFI Part header", io.getPriority(), () -> {
 			if (!read.isSuccessful()) {
 				progress.error(read.getError());
 				return;
@@ -74,23 +73,23 @@ public class GPT {
 				progress.error(new Exception("Invalid EFI Part header"));
 				return;
 			}
-			header.version = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x08);
-			header.headerSize = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x0C);
-			header.headerCRC32 = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x10);
-			header.currentLBA = DataUtil.readLongLittleEndian(buf, 0x18);
-			header.backupLBA = DataUtil.readLongLittleEndian(buf, 0x20);
-			header.firstUsableLBA = DataUtil.readLongLittleEndian(buf, 0x28);
-			header.lastUsableLBA = DataUtil.readLongLittleEndian(buf, 0x30);
+			header.version = DataUtil.Read32U.LE.read(buf, 0x08);
+			header.headerSize = DataUtil.Read32U.LE.read(buf, 0x0C);
+			header.headerCRC32 = DataUtil.Read32U.LE.read(buf, 0x10);
+			header.currentLBA = DataUtil.Read64.LE.read(buf, 0x18);
+			header.backupLBA = DataUtil.Read64.LE.read(buf, 0x20);
+			header.firstUsableLBA = DataUtil.Read64.LE.read(buf, 0x28);
+			header.lastUsableLBA = DataUtil.Read64.LE.read(buf, 0x30);
 			System.arraycopy(buf, 0x38, header.diskGUID, 0, 0x10);
-			header.partitionsTableLBA = DataUtil.readLongLittleEndian(buf, 0x48);
-			header.nbPartitionsEntries = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x50);
-			header.partitionEntrySize = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x54);
-			header.partitionsTableCRC32 = DataUtil.readUnsignedIntegerLittleEndian(buf, 0x58);
+			header.partitionsTableLBA = DataUtil.Read64.LE.read(buf, 0x48);
+			header.nbPartitionsEntries = DataUtil.Read32U.LE.read(buf, 0x50);
+			header.partitionEntrySize = DataUtil.Read32U.LE.read(buf, 0x54);
+			header.partitionsTableCRC32 = DataUtil.Read32U.LE.read(buf, 0x58);
 			partitions = new PartitionEntry[header.nbPartitionsEntries > 4096 ? 4096 : (int)header.nbPartitionsEntries];
 			long step = work / 10;
 			progress.progress(step);
 			loadPartitionEntry(io, pos + (header.partitionsTableLBA - header.currentLBA) * 512, 0, buf, progress, work - step);
-		}), true);
+		}, true);
 	}
 	
 	private void loadPartitionEntry(IO.Readable.Seekable io, long pos, int entryIndex, byte[] buf, WorkProgress progress, long work) {
@@ -98,8 +97,8 @@ public class GPT {
 			progress.done();
 			return;
 		}
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 0x80));
-		read.listenAsync(new Task.Cpu.FromRunnable("Read EFI Partition entry", io.getPriority(), () -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 0x80));
+		read.thenStart("Read EFI Partition entry", io.getPriority(), () -> {
 			if (!read.isSuccessful()) {
 				progress.error(read.getError());
 				return;
@@ -118,9 +117,9 @@ public class GPT {
 				partitions[entryIndex] = new PartitionEntry();
 				System.arraycopy(buf, 0x00, partitions[entryIndex].typeGUID, 0, 0x10);
 				System.arraycopy(buf, 0x10, partitions[entryIndex].partitionGUID, 0, 0x10);
-				partitions[entryIndex].firstLBA = DataUtil.readLongLittleEndian(buf, 0x20);
-				partitions[entryIndex].lastLBA = DataUtil.readLongLittleEndian(buf, 0x28);
-				partitions[entryIndex].attributesFlags = DataUtil.readLongLittleEndian(buf, 0x30);
+				partitions[entryIndex].firstLBA = DataUtil.Read64.LE.read(buf, 0x20);
+				partitions[entryIndex].lastLBA = DataUtil.Read64.LE.read(buf, 0x28);
+				partitions[entryIndex].attributesFlags = DataUtil.Read64.LE.read(buf, 0x30);
 				int nameSize = 0;
 				while (nameSize < 36 && (buf[0x38 + nameSize * 2] != 0 || buf[0x38 + nameSize * 2 + 1] != 0))
 					nameSize++;
@@ -129,6 +128,6 @@ public class GPT {
 			long step = work / (partitions.length - entryIndex);
 			progress.progress(step);
 			loadPartitionEntry(io, pos + header.partitionEntrySize, entryIndex + 1, buf, progress, work - step);
-		}), true);
+		}, true);
 	}
 }

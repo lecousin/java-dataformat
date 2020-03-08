@@ -5,8 +5,9 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.core.operations.Operation;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.CompositeLocalizable;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -59,7 +60,7 @@ public class DataFormatReadOperationOneToOneWithIntermediates<Input extends Data
 
 	@SuppressWarnings({ "unchecked", "rawtypes" })
 	@Override
-	public AsyncWork<Pair<Output, Object>, ? extends Exception> execute(Data data, CompositeNamedObject params, byte priority, WorkProgress progress, long work) {
+	public AsyncSupplier<Pair<Output, Object>, ? extends Exception> execute(Data data, CompositeNamedObject params, Priority priority, WorkProgress progress, long work) {
 		long stepRead;
 		if (transform instanceof OperationOneToOneChain)
 			stepRead = work / (((OperationOneToOneChain)transform).getChain().size() + 1);
@@ -67,13 +68,13 @@ public class DataFormatReadOperationOneToOneWithIntermediates<Input extends Data
 			stepRead = work / 2;
 		long stepTransform = work - stepRead;
 		
-		AsyncWork<Pair<Output,Object>,Exception> sp = new AsyncWork<>();
+		AsyncSupplier<Pair<Output,Object>,Exception> sp = new AsyncSupplier<>();
 		
-		((DataFormatReadOperation.OneToOne)read).execute(data, params.get(0), priority, progress, stepRead).listenInline(new AsyncWorkListener() {
+		((DataFormatReadOperation.OneToOne)read).execute(data, params.get(0), priority, progress, stepRead).listen(new Listener() {
 			@Override
 			public void ready(Object result) {
 				Pair p = (Pair)result;
-				((Operation.OneToOne)transform).execute(p.getValue1(), params.get(1), priority, progress, stepTransform).listenInline(new AsyncWorkListener() {
+				((Operation.OneToOne)transform).execute(p.getValue1(), params.get(1), priority, progress, stepTransform).listen(new Listener() {
 					@Override
 					public void ready(Object result) {
 						Pair p2 = (Pair)result;

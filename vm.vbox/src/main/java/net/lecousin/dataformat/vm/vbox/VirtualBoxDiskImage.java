@@ -4,25 +4,26 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.function.Consumer;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOUtil;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.progress.WorkProgress;
+import net.lecousin.framework.text.StringUtil;
 import net.lecousin.framework.util.AsyncCloseable;
 import net.lecousin.framework.util.ConcurrentCloseable;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.RunnableWithParameter;
-import net.lecousin.framework.util.StringUtil;
 
-public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable {
+public class VirtualBoxDiskImage implements AsyncCloseable<IOException>, Closeable {
 
 	public VirtualBoxDiskImage(IO.Readable.Seekable vdi) {
 		io = vdi;
@@ -68,16 +69,16 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 	public long getNumberOfAllocatedBlocks() { return nbBlocksAllocated; }
 	public String getUID() { return uid; }
 	
-	public ISynchronizationPoint<Exception> open(WorkProgress progress, long work) {
-		SynchronizationPoint<Exception> sp = new SynchronizationPoint<>();
+	public IAsync<IOException> open(WorkProgress progress, long work) {
+		Async<IOException> sp = new Async<>();
 		byte[] buf1 = new byte[4];
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(0x44, ByteBuffer.wrap(buf1));
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(0x44, ByteBuffer.wrap(buf1));
 		sp.onCancel((event) -> { read.unblockCancel(event); });
 		long stepVersion = work / 100;
 		long stepHeader = work / 10;
 		long stepTable = work - stepVersion - stepHeader;
-		read.listenInlineSP(() -> {
-			long ver = DataUtil.readUnsignedIntegerLittleEndian(buf1, 0);
+		read.onDone(() -> {
+			long ver = DataUtil.Read32U.LE.read(buf1, 0);
 			verMaj = (int)(ver >> 16);
 			verMin = (int)(ver & 0xFFFF);
 			if (verMaj > 1) {
@@ -94,31 +95,31 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 				buf = new byte[384+16]; // version 1.2
 			
 			if (progress != null) progress.progress(stepVersion);
-			io.readFullyAsync(0x48, ByteBuffer.wrap(buf)).listenInlineSP(() -> {
+			io.readFullyAsync(0x48, ByteBuffer.wrap(buf)).onDone(() -> {
 				int pos = verMaj == 0 ? 0 : 4;
-				imageType = ImageType.fromValue((int)DataUtil.readUnsignedIntegerLittleEndian(buf, pos));
+				imageType = ImageType.fromValue((int)DataUtil.Read32U.LE.read(buf, pos));
 				pos += 8;
 				int i = 0;
 				while (buf[pos + i] != 0 && i < 256) i++;
 				comment = new String(buf, pos, i, StandardCharsets.UTF_8);
 				pos += 256; // after comment
 				if (verMaj == 1) {
-					blocksOffset = DataUtil.readUnsignedIntegerLittleEndian(buf, pos);
-					dataOffset = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 4);
+					blocksOffset = DataUtil.Read32U.LE.read(buf, pos);
+					dataOffset = DataUtil.Read32U.LE.read(buf, pos + 4);
 					pos += 8;
 				}
 				pos += 16; // legacy geometry
 				if (verMaj == 1)
 					pos += 4; // was BIOS HDD translation mode, now unused
-				size = DataUtil.readLongLittleEndian(buf, pos);
-				blockSize = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 8);
+				size = DataUtil.Read64.LE.read(buf, pos);
+				blockSize = DataUtil.Read32U.LE.read(buf, pos + 8);
 				pos += 12;
 				if (verMaj == 1) {
-					// TODO ? extraBlockDataSize = DataUtil.readUnsignedIntegerLittleEndian(buf, pos);
+					// TODO ? extraBlockDataSize = DataUtil.Read32U.LE.read(buf, pos);
 					pos += 4;
 				}
-				nbBlocks = DataUtil.readUnsignedIntegerLittleEndian(buf, pos);
-				nbBlocksAllocated = DataUtil.readUnsignedIntegerLittleEndian(buf, pos + 4);
+				nbBlocks = DataUtil.Read32U.LE.read(buf, pos);
+				nbBlocksAllocated = DataUtil.Read32U.LE.read(buf, pos + 4);
 				uid = StringUtil.encodeHexa(buf, pos + 8, 16);
 				//uidLastModified = StringUtil.encodeHexa(buf, pos + 24, 16);
 				//uidPrimaryImage = StringUtil.encodeHexa(buf, pos + 40, 16);
@@ -129,7 +130,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 				}
 				if (progress != null) progress.progress(stepHeader);
 				table = new byte[(int)(nbBlocks*4)];
-				io.readFullyAsync(blocksOffset, ByteBuffer.wrap(table)).listenInlineSP(() -> {
+				io.readFullyAsync(blocksOffset, ByteBuffer.wrap(table)).onDone(() -> {
 					if (progress != null) progress.progress(stepTable);
 					sp.unblock();
 				}, sp);
@@ -139,7 +140,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 	}
 	
 	@Override
-	public ISynchronizationPoint<Exception> closeAsync() {
+	public IAsync<IOException> closeAsync() {
 		table = null;
 		return io.closeAsync();
 	}
@@ -151,16 +152,16 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		catch (Exception e) { throw IO.error(e); }
 	}
 	
-	public IO.Readable.Seekable createIO(byte priority) {
+	public IO.Readable.Seekable createIO(Priority priority) {
 		return new ContentIO(priority);
 	}
 	
-	public class ContentIO extends ConcurrentCloseable implements IO.Readable.Seekable {
-		private ContentIO(byte priority) {
+	public class ContentIO extends ConcurrentCloseable<IOException> implements IO.Readable.Seekable {
+		private ContentIO(Priority priority) {
 			this.priority = priority;
 		}
 		
-		private byte priority;
+		private Priority priority;
 		private long pos = 0;
 
 		@Override
@@ -174,12 +175,12 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public void setPriority(byte priority) {
+		public void setPriority(Priority priority) {
 			this.priority = priority;
 		}
 
 		@Override
-		public byte getPriority() { return priority; }
+		public Priority getPriority() { return priority; }
 
 		@Override
 		public TaskManager getTaskManager() {
@@ -187,18 +188,18 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		protected ISynchronizationPoint<?> closeUnderlyingResources() {
-			return new SynchronizationPoint<>(true);
+		protected IAsync<IOException> closeUnderlyingResources() {
+			return new Async<>(true);
 		}
 
 		@Override
-		protected void closeResources(SynchronizationPoint<Exception> ondone) {
+		protected void closeResources(Async<IOException> ondone) {
 			ondone.unblock();
 		}
 
 		@Override
-		public ISynchronizationPoint<IOException> canStartReading() {
-			return new SynchronizationPoint<>(true);
+		public IAsync<IOException> canStartReading() {
+			return new Async<>(true);
 		}
 
 		@Override
@@ -207,7 +208,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Integer, IOException> readAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+		public AsyncSupplier<Integer, IOException> readAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 			return readAsync(pos, buffer, ondone);
 		}
 
@@ -217,7 +218,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Integer, IOException> readFullyAsync(ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+		public AsyncSupplier<Integer, IOException> readFullyAsync(ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 			return readFullyAsync(pos, buffer, ondone);
 		}
 
@@ -231,10 +232,10 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Long, IOException> skipAsync(long n, RunnableWithParameter<Pair<Long, IOException>> ondone) {
+		public AsyncSupplier<Long, IOException> skipAsync(long n, Consumer<Pair<Long, IOException>> ondone) {
 			Long s = Long.valueOf(skipSync(n));
-			if (ondone != null) ondone.run(new Pair<>(s, null));
-			return new AsyncWork<>(s, null);
+			if (ondone != null) ondone.accept(new Pair<>(s, null));
+			return new AsyncSupplier<>(s, null);
 		}
 
 		@Override
@@ -250,10 +251,10 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Long, IOException> seekAsync(SeekType type, long move, RunnableWithParameter<Pair<Long, IOException>> ondone) {
+		public AsyncSupplier<Long, IOException> seekAsync(SeekType type, long move, Consumer<Pair<Long, IOException>> ondone) {
 			Long s = Long.valueOf(seekSync(type, move));
-			if (ondone != null) ondone.run(new Pair<>(s, null));
-			return new AsyncWork<>(s, null);
+			if (ondone != null) ondone.accept(new Pair<>(s, null));
+			return new AsyncSupplier<>(s, null);
 		}
 
 		@Override
@@ -264,7 +265,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 				LCCore.getApplication().getDefaultLogger().error("Invalid VDI Block index " + index + ": only " + (table.length / 4) + " blocks.", new Exception());
 				return 0xFFFFFFFFL; // like an empty block
 			}
-			return DataUtil.readUnsignedIntegerLittleEndian(table, index * 4);
+			return DataUtil.Read32U.LE.read(table, index * 4);
 		}
 		
 		@Override
@@ -291,14 +292,14 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Integer, IOException> readAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+		public AsyncSupplier<Integer, IOException> readAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 			if (pos >= size) {
-				if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(-1), null));
-				return new AsyncWork<>(Integer.valueOf(-1), null);
+				if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(-1), null));
+				return new AsyncSupplier<>(Integer.valueOf(-1), null);
 			}
 			if (!buffer.hasRemaining()) {
-				if (ondone != null) ondone.run(new Pair<>(Integer.valueOf(0), null));
-				return new AsyncWork<>(Integer.valueOf(0), null);
+				if (ondone != null) ondone.accept(new Pair<>(Integer.valueOf(0), null));
+				return new AsyncSupplier<>(Integer.valueOf(0), null);
 			}
 			int block = (int)(pos / blockSize);
 			long blockOffset = pos % blockSize;
@@ -317,12 +318,13 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 					}
 				});
 			}
-			AsyncWork<Integer, IOException> result = new AsyncWork<>();
+			AsyncSupplier<Integer, IOException> result = new AsyncSupplier<>();
 			int len = (int)l;
-			new Task.Cpu.FromRunnable("Read unused block from VDI", priority, () -> {
+			Task.cpu("Read unused block from VDI", priority, t -> {
 				for (int i = 0; i < len; ++i) buffer.put((byte)0);
 				ContentIO.this.pos = pos + len;
 				result.unblockSuccess(Integer.valueOf(len));
+				return null;
 			}).start();
 			return result;
 		}
@@ -355,7 +357,7 @@ public class VirtualBoxDiskImage implements AsyncCloseable<Exception>, Closeable
 		}
 
 		@Override
-		public AsyncWork<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, RunnableWithParameter<Pair<Integer, IOException>> ondone) {
+		public AsyncSupplier<Integer, IOException> readFullyAsync(long pos, ByteBuffer buffer, Consumer<Pair<Integer, IOException>> ondone) {
 			return IOUtil.readFullyAsync(this, pos, buffer, ondone);
 		}
 

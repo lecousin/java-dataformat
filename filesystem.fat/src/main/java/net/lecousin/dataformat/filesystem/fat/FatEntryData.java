@@ -1,11 +1,13 @@
 package net.lecousin.dataformat.filesystem.fat;
 
+import java.io.IOException;
 import java.util.ArrayList;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Readable.Seekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -55,8 +57,8 @@ public class FatEntryData extends Data {
 	}
 	
 	@Override
-	protected AsyncWork<Readable, ? extends Exception> openIOReadOnly(byte priority) {
-		return new AsyncWork<>(new FatEntryIO(fat, entry, priority), null);
+	protected AsyncSupplier<Readable, IOException> openIOReadOnly(Priority priority) {
+		return new AsyncSupplier<>(new FatEntryIO(fat, entry, priority), null);
 	}
 
 	@Override
@@ -64,7 +66,7 @@ public class FatEntryData extends Data {
 		return false;
 	}
 	@Override
-	protected <T extends Seekable & net.lecousin.framework.io.IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends Seekable & net.lecousin.framework.io.IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 	

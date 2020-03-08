@@ -14,9 +14,9 @@ import net.lecousin.dataformat.core.actions.CreateDataAction;
 import net.lecousin.dataformat.core.actions.RemoveDataAction;
 import net.lecousin.dataformat.core.actions.RenameDataAction;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.exception.NoException;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -36,8 +36,8 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 	}
 
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
-		return new AsyncWork<>(null, null);
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
+		return new AsyncSupplier<>(null, null);
 	}
 
 	@Override
@@ -84,27 +84,25 @@ public class FileSystemDirectoryFormat implements ContainerDataFormat.ContainerD
 		public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 			FileData dir = (FileData)container;
 			WorkProgress progress = new WorkProgressImpl(1000, new LocalizableString("dataformat", "Listing files").appLocalizationSync());
-			new Task.OnFile<Void, NoException>(dir.file, "Read directory content", Task.PRIORITY_NORMAL) {
-				@Override
-				public Void run() {
-					File[] files = dir.file.listFiles();
-					if (files == null) {
-						Exception error = new AccessDeniedException(dir.file.getAbsolutePath());
-						listener.error(error);
-						progress.error(error);
-						return null;
-					}
-					progress.progress(800);
-					new Task.Cpu.FromRunnable("List directory content as data", Task.PRIORITY_NORMAL, () -> {
-						ArrayList<Data> list = new ArrayList<>(files.length);
-						for (File f : files)
-							list.add(FileData.get(f));
-						listener.elementsReady(list);
-						progress.done();
-					}).start();
+			Task.file(dir.file, "Read directory content", Priority.NORMAL, t -> {
+				File[] files = dir.file.listFiles();
+				if (files == null) {
+					Exception error = new AccessDeniedException(dir.file.getAbsolutePath());
+					listener.error(error);
+					progress.error(error);
 					return null;
 				}
-			}.start();
+				progress.progress(800);
+				Task.cpu("List directory content as data", Priority.NORMAL, t2 -> {
+					ArrayList<Data> list = new ArrayList<>(files.length);
+					for (File f : files)
+						list.add(FileData.get(f));
+					listener.elementsReady(list);
+					progress.done();
+					return null;
+				}).start();
+				return null;
+			}).start();
 			// TODO start file system watcher
 			return progress;
 		}

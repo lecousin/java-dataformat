@@ -12,8 +12,8 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -58,8 +58,8 @@ public class EFIPartDataFormat implements ContainerDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<EFIPartitions, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<EFIPartitions, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<EFIPartitions, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<EFIPartitions, Exception> result = new AsyncSupplier<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)
 				content = (IO.Readable.Seekable)io;
@@ -72,7 +72,7 @@ public class EFIPartDataFormat implements ContainerDataFormat {
 			GPT gpt = new GPT();
 			WorkProgress gptProgress = gpt.load(content, 0);
 			WorkProgress.link(gptProgress, progress, work - work / 50);
-			gptProgress.getSynch().listenAsync(new Task.Cpu.FromRunnable("Read EFI GPT Partitions", io.getPriority(), () -> {
+			gptProgress.getSynch().thenStart("Read EFI GPT Partitions", io.getPriority(), () -> {
 				EFIPartitions partitions = new EFIPartitions();
 				for (int i = 0; i < gpt.getPartitions().length; ++i) {
 					GPT.PartitionEntry pe = gpt.getPartitions()[i];
@@ -87,7 +87,7 @@ public class EFIPartDataFormat implements ContainerDataFormat {
 				}
 				progress.progress(work / 50);
 				result.unblockSuccess(partitions);
-			}), result);
+			}, result);
 			return result;
 		}
 
@@ -103,14 +103,14 @@ public class EFIPartDataFormat implements ContainerDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		return null;
 	}
 
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading EFI partition table");
-		cache.open(container, this, Task.PRIORITY_NORMAL, progress, 800).listenInline(
+		cache.open(container, this, Priority.NORMAL, progress, 800).onDone(
 			(res) -> {
 				if (res == null) {
 					listener.elementsReady(new ArrayList<>(0));

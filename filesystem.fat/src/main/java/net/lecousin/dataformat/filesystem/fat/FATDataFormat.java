@@ -10,8 +10,9 @@ import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.AsyncCollection;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -45,8 +46,8 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<FAT, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<FAT, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<FAT, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<FAT, Exception> result = new AsyncSupplier<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)
 				content = (IO.Readable.Seekable)io;
@@ -56,12 +57,12 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 					result.error(e);
 					return result;
 				}
-			AsyncWork<FAT, IOException> open = FAT.open(content);
-			open.listenInlineSP(() -> {
-				open.getResult().getLoadedSynch().listenInlineSP(() -> {
+			AsyncSupplier<FAT, IOException> open = FAT.open(content);
+			open.onDone(() -> {
+				open.getResult().getLoadedSynch().onDone(() -> {
 					result.unblockSuccess(open.getResult());
-				}, result);
-			}, result);
+				}, result, e -> e);
+			}, result, e -> e);
 			return result;
 		}
 
@@ -79,10 +80,10 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 	};
 
 	@Override
-	public AsyncWork<FATDataFormatInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<FATDataFormatInfo, Exception> result = new AsyncWork<>();
-		AsyncWork<CachedObject<FAT>, Exception> getCache = cache.open(data, this, priority, null, 0);
-		getCache.listenAsync(new Task.Cpu.FromRunnable("Get FAT File System information", priority, () -> {
+	public AsyncSupplier<FATDataFormatInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<FATDataFormatInfo, Exception> result = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<FAT>, Exception> getCache = cache.open(data, this, priority, null, 0);
+		getCache.thenStart("Get FAT File System information", priority, () -> {
 			FAT fs = getCache.getResult().get();
 			FATDataFormatInfo info = new FATDataFormatInfo();
 			info.bytesPerSector = fs.bytesPerSector;
@@ -91,25 +92,25 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 			info.serialNumber = fs.serialNumber;
 			info.formatterSystem = fs.formatterSystem;
 			result.unblockSuccess(info);
-		}), result);
+		}, result);
 		return result;
 	};
 	
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading FAT File System");
-		AsyncWork<CachedObject<FAT>, Exception> getCache = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 300);
-		new Task.Cpu.FromRunnable("Get FAT File System root directory content", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<FAT>, Exception> getCache = cache.open(container, this, Priority.IMPORTANT, progress, 300);
+		Task.cpu("Get FAT File System root directory content", Priority.IMPORTANT, y -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());
 				progress.error(getCache.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error reading FAT file system", getCache.getError());
-				return;
+				return null;
 			}
 			if (getCache.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			FAT fs = getCache.getResult().get();
 			listener.elementsReady(new ArrayList<>(0));
@@ -133,6 +134,7 @@ public abstract class FATDataFormat implements ContainerDataFormat {
 					getCache.getResult().release(FATDataFormat.this);
 				}
 			));
+			return null;
 		}).startOn(getCache, true);
 		return progress;
 	}

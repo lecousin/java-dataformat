@@ -10,11 +10,10 @@ import net.lecousin.dataformat.core.hierarchy.DirectoryData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -54,11 +53,11 @@ public class ZipDataFormat extends ArchiveDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<ZipArchive,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<ZipArchive,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			ZipArchive zip = ZipArchive.loadForExtraction((IO.Readable.Seekable&IO.KnownSize)io);
-			ISynchronizationPoint<IOException> sp = zip.getSynchOnReady();
-			AsyncWork<ZipArchive,Exception> result = new AsyncWork<>();
-			sp.listenInline(new Runnable() {
+			IAsync<IOException> sp = zip.getSynchOnReady();
+			AsyncSupplier<ZipArchive,Exception> result = new AsyncSupplier<>();
+			sp.onDone(new Runnable() {
 				@Override
 				public void run() {
 					// TODO better progress
@@ -85,10 +84,10 @@ public class ZipDataFormat extends ArchiveDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<ZipDataFormatInfo,Exception> getInfo(Data data, byte priority) {
-		AsyncWork<ZipDataFormatInfo,Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<ZipArchive>,Exception> get = cache.open(data, this, priority, null, 0);
-		get.listenInline(new Runnable() {
+	public AsyncSupplier<ZipDataFormatInfo,Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<ZipDataFormatInfo,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<ZipArchive>,Exception> get = cache.open(data, this, priority, null, 0);
+		get.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (get.isCancelled()) return;
@@ -100,12 +99,7 @@ public class ZipDataFormat extends ArchiveDataFormat {
 				get.getResult().release(ZipDataFormat.this);
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				get.unblockCancel(event);
-			}
-		});
+		sp.onCancel(get::cancel);
 		return sp;
 	}
 	
@@ -121,22 +115,23 @@ public class ZipDataFormat extends ArchiveDataFormat {
 		while (zipData instanceof DirectoryData)
 			zipData = ((DirectoryData)zipData).getContainer();
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading zip content");
-		AsyncWork<CachedObject<ZipArchive>,Exception> getCache = cache.open(zipData, this, Task.PRIORITY_IMPORTANT, progress, 800);
+		AsyncSupplier<CachedObject<ZipArchive>,Exception> getCache = cache.open(zipData, this, Priority.IMPORTANT, progress, 800);
 		Data zip = zipData;
-		new Task.Cpu.FromRunnable("List zip content", Task.PRIORITY_IMPORTANT, () -> {
+		Task.cpu("List zip content", Priority.IMPORTANT, t -> {
 			if (getCache.hasError()) {
 				listener.error(getCache.getError());
 				progress.error(getCache.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error opening ZIP file", getCache.getError());
-				return;
+				return null;
 			}
 			if (getCache.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			listSubData(zip, container, listener, getCache.getResult().get(), progress);
 			getCache.getResult().release(ZipDataFormat.this);
+			return null;
 		}).startOn(getCache, true);
 		return progress;
 	}

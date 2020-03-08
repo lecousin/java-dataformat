@@ -3,7 +3,8 @@ package net.lecousin.dataformat.archive.cab;
 import java.io.IOException;
 
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.EmptyReadable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -42,20 +43,20 @@ public class CabFileData extends Data {
 	}
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
 		if (file.getSize() == 0)
-			return new AsyncWork<>(new EmptyReadable(file.getName(), priority),null);
-		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<CabFile>, Exception> c = CabDataFormat.cache.open(cab, this, priority, null, 0);
-		c.listenInline(new Runnable() {
+			return new AsyncSupplier<>(new EmptyReadable(file.getName(), priority),null);
+		AsyncSupplier<IO.Readable, IOException> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<CabFile>, Exception> c = CabDataFormat.cache.open(cab, this, priority, null, 0);
+		c.onDone(new Runnable() {
 			@Override
 			public void run() {
-				if (c.hasError()) { sp.error(c.getError()); return; }
+				if (c.hasError()) { sp.error(IO.error(c.getError())); return; }
 				if (c.isCancelled()) { sp.cancel(c.getCancelEvent()); return; }
 				CabFile cab = c.getResult().get();
 				
-				AsyncWork<IO.Readable,IOException> open = cab.openFile(file, priority);
-				open.listenInline(new Runnable() {
+				AsyncSupplier<IO.Readable,IOException> open = cab.openFile(file, priority);
+				open.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (!open.isSuccessful()) {
@@ -85,7 +86,7 @@ public class CabFileData extends Data {
 	}
 	
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 }

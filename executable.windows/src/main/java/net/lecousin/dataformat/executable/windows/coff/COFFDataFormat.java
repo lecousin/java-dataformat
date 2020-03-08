@@ -16,9 +16,10 @@ import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
 import net.lecousin.framework.collections.CollectionListener;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
@@ -30,9 +31,9 @@ import net.lecousin.framework.math.FragmentedRangeLong;
 import net.lecousin.framework.math.RangeLong;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
+import net.lecousin.framework.text.StringUtil;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.StringUtil;
 
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
@@ -62,10 +63,10 @@ public class COFFDataFormat implements ContainerDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<COFFInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<COFFInfo,Exception> result = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(priority);
-		open.listenInline(new Runnable() {
+	public AsyncSupplier<COFFInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<COFFInfo,Exception> result = new AsyncSupplier<>();
+		AsyncSupplier<? extends IO.Readable.Seekable,IOException> open = data.openReadOnly(priority);
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (!open.isSuccessful()) {
@@ -78,7 +79,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 				@SuppressWarnings("resource")
 				IO.Readable.Seekable io = open.getResult();
 				byte[] buf = new byte[20];
-				io.readAsync(0, ByteBuffer.wrap(buf)).listenInline(new AsyncWorkListener<Integer, IOException>() {
+				io.readAsync(0, ByteBuffer.wrap(buf)).listen(new Listener<Integer, IOException>() {
 					@Override
 					public void ready(Integer nb) {
 						if (nb.intValue() != 20) {
@@ -87,7 +88,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 							return;
 						}
 						COFFInfo info = new COFFInfo();
-						info.targetMachine = COFFInfo.TargetMachine.get(DataUtil.readUnsignedShortLittleEndian(buf, 0));
+						info.targetMachine = COFFInfo.TargetMachine.get(DataUtil.Read16U.LE.read(buf, 0));
 						// TODO
 						result.unblockSuccess(info);
 						try { io.close(); } catch (Throwable t) {}
@@ -110,14 +111,14 @@ public class COFFDataFormat implements ContainerDataFormat {
 	
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = container.openReadOnly(Task.PRIORITY_NORMAL);
+		AsyncSupplier<? extends IO.Readable.Seekable,IOException> open = container.openReadOnly(Priority.NORMAL);
 		WorkProgress progress = new WorkProgressImpl(10000, "Reading COFF sections");
-		open.listenInline(
+		open.onDone(
 			(io) -> {
 				progress.progress(500);
 				byte[] buf = new byte[40];
-				AsyncWork<Integer,IOException> read = io.readAsync(0, ByteBuffer.wrap(buf,0,20));
-				read.listenInline(() -> {
+				AsyncSupplier<Integer,IOException> read = io.readAsync(0, ByteBuffer.wrap(buf,0,20));
+				read.onDone(() -> {
 					if (read.hasError()) {
 						listener.error(read.getError());
 						progress.error(read.getError());
@@ -130,8 +131,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 						io.closeAsync();
 						return;
 					}
-					int nb_sections = DataUtil.readUnsignedShortLittleEndian(buf, 2);
-					int size_opt_headers = DataUtil.readUnsignedShortLittleEndian(buf, 16);
+					int nb_sections = DataUtil.Read16U.LE.read(buf, 2);
+					int size_opt_headers = DataUtil.Read16U.LE.read(buf, 16);
 					long pos = 20+size_opt_headers;
 					progress.progress(200);
 					readSection(container, ((Long)container.getProperty("COFFOffset")).longValue(), io, 0, nb_sections, pos, buf, new ArrayList<Section>(nb_sections), -1, listener, progress, 10000 - 500 - 200 - 300);
@@ -160,39 +161,36 @@ public class COFFDataFormat implements ContainerDataFormat {
 	}
 	private void readSection(Data data, long offset, IO.Readable.Seekable io, int sectionIndex, int nbSections, long pos, byte[] buf, ArrayList<Section> sections, long min_section_start, CollectionListener<Data> listener, WorkProgress progress, long work) {
 		if (sectionIndex == nbSections) {
-			Task.Cpu<Void, NoException> task = new Task.Cpu<Void, NoException>("Reading COFF sections", Task.PRIORITY_NORMAL) {
-				@Override
-				public Void run() {
-					FragmentedRangeLong unused_data = min_section_start > 0 ? new FragmentedRangeLong(new RangeLong(min_section_start, data.getSize()-1)) : new FragmentedRangeLong();
-					ArrayList<Data> datas = new ArrayList<>(sections.size()+2);
-					for (Section s : sections) {
-						unused_data.removeRange(s.real_addr, s.real_addr+s.real_size-1);
-						if (s.name.equals(".rsrc")) {
-							try { readRSRC(data, io, s, sections, buf, datas); }
-							catch (Exception e) {
-								if (logger.isErrorEnabled())
-									logger.error("Error reading RSRC", e);
-							}
-						} else
-							datas.add(new SubData(data, s.real_addr+s.virtual_size, s.real_size, new FixedLocalizedString(s.name)));
-					}
-					int i = 1;
-					for (RangeLong r : unused_data) {
-						SubData hidden = new SubData(data, r.min, r.max-r.min+1, new LocalizableStringBuffer(new LocalizableString("dataformat.executable.windows", "Hidden data"), " "+(i++)));
-						datas.add(hidden);
-					}
-					listener.elementsReady(datas);
-					progress.done();
-					io.closeAsync();
-					return null;
+			Task<Void, NoException> task = Task.cpu("Reading COFF sections", Priority.NORMAL, t -> {
+				FragmentedRangeLong unused_data = min_section_start > 0 ? new FragmentedRangeLong(new RangeLong(min_section_start, data.getSize()-1)) : new FragmentedRangeLong();
+				ArrayList<Data> datas = new ArrayList<>(sections.size()+2);
+				for (Section s : sections) {
+					unused_data.removeRange(s.real_addr, s.real_addr+s.real_size-1);
+					if (s.name.equals(".rsrc")) {
+						try { readRSRC(data, io, s, sections, buf, datas); }
+						catch (Exception e) {
+							if (logger.isErrorEnabled())
+								logger.error("Error reading RSRC", e);
+						}
+					} else
+						datas.add(new SubData(data, s.real_addr+s.virtual_size, s.real_size, new FixedLocalizedString(s.name)));
 				}
-			};
+				int i = 1;
+				for (RangeLong r : unused_data) {
+					SubData hidden = new SubData(data, r.min, r.max-r.min+1, new LocalizableStringBuffer(new LocalizableString("dataformat.executable.windows", "Hidden data"), " "+(i++)));
+					datas.add(hidden);
+				}
+				listener.elementsReady(datas);
+				progress.done();
+				io.closeAsync();
+				return null;
+			});
 			task.start();
 			return;
 		}
 		long step = work / (nbSections - sectionIndex);
-		AsyncWork<Integer,IOException> read = io.readAsync(pos, ByteBuffer.wrap(buf));
-		read.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> read = io.readAsync(pos, ByteBuffer.wrap(buf));
+		read.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (!read.isSuccessful()) {
@@ -204,10 +202,10 @@ public class COFFDataFormat implements ContainerDataFormat {
 				for (j = 0; j < 9 && buf[j] != 0; ++j);
 				Section s = new Section();
 				s.name = new String(buf, 0, j, StandardCharsets.UTF_8);
-				s.virtual_size = DataUtil.readUnsignedIntegerLittleEndian(buf, 8);
-				s.virtual_addr = DataUtil.readUnsignedIntegerLittleEndian(buf, 12);
-				s.real_size = DataUtil.readUnsignedIntegerLittleEndian(buf, 16);
-				s.real_addr = DataUtil.readUnsignedIntegerLittleEndian(buf, 20);
+				s.virtual_size = DataUtil.Read32U.LE.read(buf, 8);
+				s.virtual_addr = DataUtil.Read32U.LE.read(buf, 12);
+				s.real_size = DataUtil.Read32U.LE.read(buf, 16);
+				s.real_addr = DataUtil.Read32U.LE.read(buf, 20);
 				s.real_addr -= offset;
 				if (s.real_size > s.virtual_size) s.real_size = s.virtual_size;
 				if (s.real_size > 0)
@@ -275,8 +273,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 					logger.error("Invalid RSRC Table at position "+StringUtil.encodeHexaPadding(table_start)+" [RSRC starts at "+StringUtil.encodeHexaPadding(rsrc.real_addr)+" ("+data.getDescription()+"): "+StringUtil.encodeHexa(b, 0, 4));
 				return;
 			}
-			int nb_names = DataUtil.readUnsignedShortLittleEndian(b, 12);
-			int nb_ids = DataUtil.readUnsignedShortLittleEndian(b, 14);
+			int nb_names = DataUtil.Read16U.LE.read(b, 12);
+			int nb_ids = DataUtil.Read16U.LE.read(b, 14);
 			ArrayList<Pair<Long,Long>> names = new ArrayList<>(nb_names);
 			for (int i = 0; i < nb_names; ++i) {
 				if (io.readFullySync(table_start+16+i*8, ByteBuffer.wrap(b,0,8)) != 8) {
@@ -284,8 +282,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 						logger.error("Invalid RSRC Table: name "+(i+1)+" cannot be read at "+StringUtil.encodeHexaPadding(table_start+16+i*8));
 					return;
 				}
-				long name_addr = DataUtil.readIntegerLittleEndian(b, 0) & 0x7FFFFFFF;
-				long addr = DataUtil.readUnsignedIntegerLittleEndian(b, 4);
+				long name_addr = DataUtil.Read32.LE.read(b, 0) & 0x7FFFFFFF;
+				long addr = DataUtil.Read32U.LE.read(b, 4);
 				names.add(new Pair<>(new Long(name_addr), new Long(addr)));
 			}
 			ArrayList<Pair<Integer,Long>> ids = new ArrayList<>(nb_ids);
@@ -295,8 +293,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 						logger.error("Invalid RSRC Table: id "+(i+1)+" cannot be read at "+StringUtil.encodeHexaPadding(table_start+16+(nb_names+i)*8));
 					return;
 				}
-				int id = DataUtil.readIntegerLittleEndian(b, 0);
-				long addr = DataUtil.readUnsignedIntegerLittleEndian(b, 4);
+				int id = DataUtil.Read32.LE.read(b, 0);
+				long addr = DataUtil.Read32U.LE.read(b, 4);
 				ids.add(new Pair<>(new Integer(id), new Long(addr)));
 			}
 			
@@ -307,7 +305,7 @@ public class COFFDataFormat implements ContainerDataFormat {
 						logger.error("Invalid RSC Table: name cannot be read at "+(rsrc.real_addr+name.getValue1().longValue()));
 					continue;
 				}
-				int name_len = DataUtil.readUnsignedShortLittleEndian(b, 0);
+				int name_len = DataUtil.Read16U.LE.read(b, 0);
 				int read = 0;
 				StringBuilder s = new StringBuilder();
 				while (read < name_len) {
@@ -329,8 +327,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 							logger.error("Invalid RSC Table: name cannot be read at its address "+(rsrc.real_addr+name.getValue2().longValue()));
 						continue;
 					}
-					long res_addr = DataUtil.readUnsignedIntegerLittleEndian(b, 0);
-					long res_size = DataUtil.readUnsignedIntegerLittleEndian(b, 4);
+					long res_addr = DataUtil.Read32U.LE.read(b, 0);
+					long res_size = DataUtil.Read32U.LE.read(b, 4);
 					map.put(s.toString(), new Pair<Long,Long>(new Long(res_addr), new Long(res_size)));
 				} else {
 					long table_addr = name.getValue2().longValue() & 0x7FFFFFFF;
@@ -351,8 +349,8 @@ public class COFFDataFormat implements ContainerDataFormat {
 							logger.error("Invalid RSC Table: id cannot be read at its address "+(rsrc.real_addr+id.getValue2().longValue()));
 						continue;
 					}
-					long res_addr = DataUtil.readUnsignedIntegerLittleEndian(b, 0);
-					long res_size = DataUtil.readUnsignedIntegerLittleEndian(b, 4);
+					long res_addr = DataUtil.Read32U.LE.read(b, 0);
+					long res_size = DataUtil.Read32U.LE.read(b, 4);
 					map.put(id.getValue1(), new Pair<Long,Long>(new Long(res_addr), new Long(res_size)));
 				} else {
 					long table_addr = id.getValue2().longValue() & 0x7FFFFFFF;

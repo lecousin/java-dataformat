@@ -9,7 +9,8 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
 import net.lecousin.framework.collections.ArrayUtil;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.system.hardware.DiskPartition;
@@ -29,8 +30,8 @@ public class MBRLegacyToEFIPartDetector implements DataFormatSpecializationDetec
 	}
 
 	@Override
-	public AsyncWork<DataFormat, NoException> detectSpecialization(Data data, byte priority, byte[] header, int headerSize) {
-		AsyncWork<DataFormat, NoException> result = new AsyncWork<>();
+	public AsyncSupplier<DataFormat, NoException> detectSpecialization(Data data, Priority priority, byte[] header, int headerSize) {
+		AsyncSupplier<DataFormat, NoException> result = new AsyncSupplier<>();
 		MBRDataFormat.instance.listenSubData(data, new CollectionListener<Data>() {
 			@Override
 			public void error(Throwable error) {
@@ -44,15 +45,15 @@ public class MBRLegacyToEFIPartDetector implements DataFormatSpecializationDetec
 					DiskPartition p = (DiskPartition)d.getProperty(MBRDataFormat.DATA_PROPERTY_PARTITION);
 					if (p != null) {
 						if (p.type == 0xEE) {
-							AsyncWork<? extends IO.Readable.Buffered, Exception> open = d.openReadOnly(priority);
+							AsyncSupplier<? extends IO.Readable.Buffered, IOException> open = d.openReadOnly(priority);
 							byte[] buf = new byte[8];
-							open.listenInline(() -> {
+							open.onDone(() -> {
 								if (!open.isSuccessful()) {
 									result.unblockSuccess(null);
 									return;
 								}
-								AsyncWork<Integer, IOException> read = open.getResult().readFullyAsync(ByteBuffer.wrap(buf));
-								read.listenInline(() -> {
+								AsyncSupplier<Integer, IOException> read = open.getResult().readFullyAsync(ByteBuffer.wrap(buf));
+								read.onDone(() -> {
 									if (!read.isSuccessful() || read.getResult().intValue() != 8) {
 										result.unblockSuccess(null);
 										return;

@@ -6,7 +6,8 @@ import java.nio.file.FileAlreadyExistsException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.actions.CreateContainerDataAction;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -47,18 +48,18 @@ public class CreateDirectoryAction extends CreateContainerDataAction<CreateDirec
 
 	@SuppressWarnings("resource")
 	@Override
-	public AsyncWork<Data, IOException> execute(Data data, NewDataParameter parameter, byte priority, WorkProgress progress, long work) {
+	public AsyncSupplier<Data, IOException> execute(Data data, NewDataParameter parameter, Priority priority, WorkProgress progress, long work) {
 		File file = new File(((FileData)data).file, parameter.name);
 		if (file.exists())
-			return new AsyncWork<>(null, new FileAlreadyExistsException(file.getAbsolutePath()));
+			return new AsyncSupplier<>(null, new FileAlreadyExistsException(file.getAbsolutePath()));
 		try {
 			if (!file.mkdir())
 				throw new IOException("Unable to create directory " + file.getAbsolutePath());
 		} catch (IOException err) {
-			return new AsyncWork<>(null, err);
+			return new AsyncSupplier<>(null, err);
 		}
 		progress.progress(work);
-		return new AsyncWork<>(FileData.get(file), null);
+		return new AsyncSupplier<>(FileData.get(file), null);
 	}
 
 }

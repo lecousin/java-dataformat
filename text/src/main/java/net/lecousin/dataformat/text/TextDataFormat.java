@@ -4,7 +4,8 @@ import java.nio.charset.Charset;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
@@ -39,10 +40,10 @@ public class TextDataFormat implements DataFormat {
 	public IconProvider getIconProvider() { return iconProvider; }
 	
 	@Override
-	public AsyncWork<TextFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<TextFormatInfo, ?> getInfo(Data data, Priority priority) {
 		TextFormatInfo info = new TextFormatInfo();
 		info.encoding = (Charset)data.getProperty(PROPERTY_CHARSET);
-		return new AsyncWork<>(info, null);
+		return new AsyncSupplier<>(info, null);
 	}
 	
 }

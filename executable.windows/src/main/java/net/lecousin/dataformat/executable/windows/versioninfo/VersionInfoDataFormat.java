@@ -10,8 +10,10 @@ import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.executable.windows.versioninfo.VersionInfo.DriverType;
 import net.lecousin.dataformat.executable.windows.versioninfo.VersionInfo.FontType;
 import net.lecousin.dataformat.executable.windows.versioninfo.VersionInfo.Type;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
@@ -27,10 +29,10 @@ public class VersionInfoDataFormat implements DataFormat {
 	public ILocalizableString getName() { return new FixedLocalizedString("Version Info"); }
 
 	@Override
-	public AsyncWork<VersionInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<VersionInfo, Exception> result = new AsyncWork<VersionInfo, Exception>();
-		AsyncWork<? extends IO.Readable.Buffered,Exception> open = data.openReadOnly(priority);
-		open.listenInline(new Runnable() {
+	public AsyncSupplier<VersionInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<VersionInfo, Exception> result = new AsyncSupplier<VersionInfo, Exception>();
+		AsyncSupplier<? extends IO.Readable.Buffered,IOException> open = data.openReadOnly(priority);
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (!open.isSuccessful()) {
@@ -38,50 +40,45 @@ public class VersionInfoDataFormat implements DataFormat {
 					else result.unblockError(open.getError());
 					return;
 				}
-				@SuppressWarnings("resource")
 				IO.Readable.Buffered io = open.getResult();
-				Task.Cpu<Void, NoException> taskRead = new Task.Cpu<Void,NoException>("Read VERSION_INFO", priority) {
-					@Override
-					public Void run() {
-						try {
-							int length = DataUtil.readUnsignedShortLittleEndian(io);
-							byte[] buf = new byte[length];
-							AsyncWork<Integer,IOException> read = io.readFullyAsync(ByteBuffer.wrap(buf,2,length-2));
-							ReadVersionInfo taskReadVersionInfo = new ReadVersionInfo(priority, buf, result);
-							read.listenAsync(taskReadVersionInfo, true);
-							read.listenInline(new Runnable() {
-								@Override
-								public void run() {
-									io.closeAsync();
-								}
-							});
-							return null;
-						} catch (Exception e) {
-							result.unblockError(e);
-							io.closeAsync();
-							return null;
-						}
+				Task<Void, NoException> taskRead = Task.cpu("Read VERSION_INFO", priority, t -> {
+					try {
+						int length = DataUtil.Read16U.LE.read(io);
+						byte[] buf = new byte[length];
+						AsyncSupplier<Integer,IOException> read = io.readFullyAsync(ByteBuffer.wrap(buf,2,length-2));
+						ReadVersionInfo taskReadVersionInfo = new ReadVersionInfo(buf, result);
+						read.thenStart(Task.cpu("Parsing VERSION_INFO", priority, taskReadVersionInfo), true);
+						read.onDone(new Runnable() {
+							@Override
+							public void run() {
+								io.closeAsync();
+							}
+						});
+						return null;
+					} catch (Exception e) {
+						result.unblockError(e);
+						io.closeAsync();
+						return null;
 					}
-				};
-				io.canStartReading().listenAsync(taskRead, true);
+				});
+				io.canStartReading().thenStart(taskRead, true);
 			}
 		});
 		return result;
 	}
 	
-	private static class ReadVersionInfo extends Task.Cpu<VersionInfo,NoException> {
-		private ReadVersionInfo(byte priority, byte[] buf, AsyncWork<VersionInfo, Exception> result) {
-			super("Parsing VERSION_INFO", priority);
+	private static class ReadVersionInfo implements Executable<VersionInfo,NoException> {
+		private ReadVersionInfo(byte[] buf, AsyncSupplier<VersionInfo, Exception> result) {
 			this.buf = buf;
 			this.result = result;
 		}
 		private byte[] buf;
-		private AsyncWork<VersionInfo, Exception> result;
+		private AsyncSupplier<VersionInfo, Exception> result;
 		@Override
-		public VersionInfo run() {
+		public VersionInfo execute(Task<VersionInfo,NoException> taskContext) {
 			VersionInfo info = new VersionInfo();
 			
-			int value_len = DataUtil.readUnsignedShortLittleEndian(buf, 2);
+			int value_len = DataUtil.Read16U.LE.read(buf, 2);
 			//int type = IOUtil.readUnsignedShortIntel(tmp, 4); //1 for text, 0 for binary
 			// here is VS_VERSION_INFO unicode string
 			int pos = 6 + 32;
@@ -91,7 +88,7 @@ public class VersionInfoDataFormat implements DataFormat {
 			pos += value_len;
 			while ((pos % 4) != 0) pos++; // padding
 			while (pos < buf.length) {
-				int len = DataUtil.readUnsignedShortLittleEndian(buf, pos);
+				int len = DataUtil.Read16U.LE.read(buf, pos);
 				if (len == 0) break;
 				if (pos + len > buf.length) break;
 				//value_len = IOUtil.readUnsignedShortIntel(tmp, pos+2); // always 0...
@@ -129,7 +126,7 @@ public class VersionInfoDataFormat implements DataFormat {
 	}
 	
 	private static int read_string_table(VersionInfo md, byte[] tmp, int pos) {
-		int len = DataUtil.readUnsignedShortLittleEndian(tmp, pos);
+		int len = DataUtil.Read16U.LE.read(tmp, pos);
 		if (pos + len > tmp.length) return tmp.length;
 		char[] lang = new char[4];
 		char[] code_page = new char[4];
@@ -151,7 +148,7 @@ public class VersionInfoDataFormat implements DataFormat {
 	}
 	
 	private static int read_string(byte[] tmp, int pos, Map<String,String> strings) {
-		int len = DataUtil.readUnsignedShortLittleEndian(tmp, pos);
+		int len = DataUtil.Read16U.LE.read(tmp, pos);
 		if (len == 0) return tmp.length;
 		if (pos + len > tmp.length) return pos+len;
 		StringBuilder name = new StringBuilder();
@@ -174,8 +171,8 @@ public class VersionInfoDataFormat implements DataFormat {
 	
 	private static void read_fixed_file_info(VersionInfo md, byte[] tmp, int pos) {
 		if (tmp[pos] != (byte)0xBD || tmp[pos+1] != (byte)0x04 || tmp[pos+2] != (byte)0xEF || tmp[pos+3] != (byte)0xFE) return;
-		long type = DataUtil.readUnsignedIntegerLittleEndian(tmp, pos+36);
-		long sub_type = DataUtil.readUnsignedIntegerLittleEndian(tmp, pos+40);
+		long type = DataUtil.Read32U.LE.read(tmp, pos+36);
+		long sub_type = DataUtil.Read32U.LE.read(tmp, pos+40);
 		switch ((int)type) {
 		case 1: md.type = Type.Application; break;
 		case 2: md.type = Type.Dynamic_Library; break;

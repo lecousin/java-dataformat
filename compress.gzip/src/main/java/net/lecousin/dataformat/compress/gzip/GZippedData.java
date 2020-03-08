@@ -1,8 +1,11 @@
 package net.lecousin.dataformat.compress.gzip;
 
+import java.io.IOException;
+
 import net.lecousin.compression.gzip.GZipReadable;
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 
@@ -32,9 +35,9 @@ public class GZippedData extends Data {
 	public Data getContainer() { return container; }
 
 	@Override
-	protected AsyncWork<IO.Readable, ? extends Exception> openIOReadOnly(byte priority) {
-		AsyncWork<IO.Readable, Exception> result = new AsyncWork<>();
-		container.openReadOnly(priority).listenInline((io) -> {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
+		AsyncSupplier<IO.Readable, IOException> result = new AsyncSupplier<>();
+		container.openReadOnly(priority).onDone((io) -> {
 			result.unblockSuccess(new GZipReadable(io, priority));
 		}, result);
 		return result;
@@ -46,7 +49,7 @@ public class GZippedData extends Data {
 	}
 	
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 

@@ -5,19 +5,19 @@ import java.util.Collections;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
 
 public interface DataWrapperDataFormat extends ContainerDataFormat {
 
-	AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work);
+	AsyncSupplier<Data, ? extends Exception> getWrappedData(Data container, WorkProgress progress, long work);
 	
 	@Override
 	default WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Opening " + getName().appLocalizationSync());
-		AsyncWork<Data, Exception> get = getWrappedData(container, progress, 950);
-		get.listenInline(
+		AsyncSupplier<Data, ? extends Exception> get = getWrappedData(container, progress, 950);
+		get.onDone(
 			(data) -> {
 				if (data == null)
 					listener.elementsReady(new ArrayList<>(0));

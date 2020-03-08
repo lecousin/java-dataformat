@@ -1,14 +1,16 @@
 package net.lecousin.dataformat.image.jpeg;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 
 import javax.imageio.ImageIO;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
 import net.lecousin.dataformat.image.ImageDataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IOAsInputStream;
 import net.lecousin.framework.io.util.ReadableWithProgress;
@@ -51,24 +53,20 @@ public class JPEGReaderOp implements DataFormatReadOperation.OneToOne<JPEGDataFo
 	}
 	
 	@Override
-	public AsyncWork<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
-		Task<Pair<BufferedImage,Object>,Exception> task = new Task.Cpu<Pair<BufferedImage,Object>,Exception>("Reading JPEG data", priority) {
-			@SuppressWarnings("resource")
-			@Override
-			public Pair<BufferedImage,Object> run() throws Exception {
-				if (!open.isSuccessful())
-					throw open.getError();
-				if (progress != null) progress.progress(work/5);
-				try (IO.Readable.Seekable io = open.getResult()) {
-					return new Pair<>(ImageIO.read(IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work - work/5), true)), null);
-				} catch (Throwable t) {
-					throw new Exception("Error reading JPEG data", t);
-				} finally {
-				}
+	public AsyncSupplier<Pair<BufferedImage,Object>,Exception> execute(Data data, Object params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<? extends IO.Readable.Seekable, IOException> open = data.openReadOnly(priority);
+		Task<Pair<BufferedImage,Object>,Exception> task = Task.cpu("Reading JPEG data", priority, taskContext -> {
+			if (!open.isSuccessful())
+				throw open.getError();
+			if (progress != null) progress.progress(work/5);
+			try (IO.Readable.Seekable io = open.getResult()) {
+				return new Pair<>(ImageIO.read(IOAsInputStream.get(new ReadableWithProgress(io, data.getSize(), progress, work - work/5), true)), null);
+			} catch (Throwable t) {
+				throw new Exception("Error reading JPEG data", t);
+			} finally {
 			}
-		};
-		open.listenAsync(task, true);
+		});
+		open.thenStart(task, true);
 		return task.getOutput();
 	}
 	

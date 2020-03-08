@@ -26,7 +26,7 @@ public class BMPDetector implements DataFormatDetector.OnlyHeaderNeeded {
 		if (headerLength < 26)
 			return null;
 		if (dataSize > 0) {
-			long bmpSize = DataUtil.readUnsignedIntegerLittleEndian(header, 2);
+			long bmpSize = DataUtil.Read32U.LE.read(header, 2);
 			if (dataSize < bmpSize) return null;
 		}
 		// bmp header must be followed by a DIB header

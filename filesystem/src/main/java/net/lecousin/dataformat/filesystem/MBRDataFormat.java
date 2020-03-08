@@ -12,8 +12,9 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.ReadableToSeekable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -53,7 +54,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<DataFormatInfo, Exception> getInfo(Data data, byte priority) {
+	public AsyncSupplier<DataFormatInfo, Exception> getInfo(Data data, Priority priority) {
 		return null;
 	}
 	
@@ -63,8 +64,8 @@ public class MBRDataFormat implements ContainerDataFormat {
 
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<Partitions, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
-			AsyncWork<Partitions, Exception> result = new AsyncWork<>();
+		protected AsyncSupplier<Partitions, Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+			AsyncSupplier<Partitions, Exception> result = new AsyncSupplier<>();
 			IO.Readable.Seekable content;
 			if (io instanceof IO.Readable.Seekable)
 				content = (IO.Readable.Seekable)io;
@@ -74,12 +75,12 @@ public class MBRDataFormat implements ContainerDataFormat {
 					result.error(e);
 					return result;
 				}
-			new Task.Cpu.FromRunnable("Read partition table", Task.PRIORITY_NORMAL, () -> {
+			Task.cpu("Read partition table", Priority.NORMAL, t -> {
 				List<DiskPartition> list = new ArrayList<>();
 				if (!DiskPartitionsUtil.readPartitionTable(content, list)) {
 					if (progress != null) progress.progress(work);
 					result.unblockSuccess(null);
-					return;
+					return null;
 				}
 				if (progress != null) progress.progress(work);
 				Partitions partitions = new Partitions();
@@ -94,6 +95,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 					partitions.list.add(partition);
 				}
 				result.unblockSuccess(partitions);
+				return null;
 			}).start();
 			return result;
 		}
@@ -112,7 +114,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading partition table");
-		cache.open(container, this, Task.PRIORITY_NORMAL, progress, 800).listenInline(
+		cache.open(container, this, Priority.NORMAL, progress, 800).onDone(
 			(res) -> {
 				if (res == null) {
 					listener.elementsReady(new ArrayList<>(0));

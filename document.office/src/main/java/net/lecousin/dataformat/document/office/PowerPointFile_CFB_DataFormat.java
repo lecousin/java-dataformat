@@ -13,11 +13,10 @@ import net.lecousin.dataformat.microsoft.ole.OLEPropertySets;
 import net.lecousin.dataformat.microsoft.ole.SummaryInformation;
 import net.lecousin.framework.collections.ArrayUtil;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.JoinPoint;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -50,14 +49,14 @@ public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 	public String[] getFileExtensions() { return exts; }
 	
 	@Override
-	public AsyncWork<PowerPointInfo,Exception> getInfo(Data data, byte priority) {
-		AsyncWork<PowerPointInfo,Exception> sp = new AsyncWork<>();
+	public AsyncSupplier<PowerPointInfo,Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<PowerPointInfo,Exception> sp = new AsyncSupplier<>();
 		PowerPointInfo info = new PowerPointInfo();
-		ArrayList<AsyncWork<?,?>> works = new ArrayList<>();
+		ArrayList<AsyncSupplier<?,?>> works = new ArrayList<>();
 		JoinPoint<NoException> jp = new JoinPoint<>();
 		jp.addToJoin(1);
 		jp.start();
-		jp.listenInline(new Runnable() {
+		jp.onDone(new Runnable() {
 			@Override
 			public void run() {
 				sp.unblockSuccess(info);
@@ -70,58 +69,52 @@ public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 					if (sp.isCancelled()) return;
 					String name = file.getName().appLocalizationSync();
 					if ("\u0005SummaryInformation".equals(name)) {
-						AsyncWork<OLEPropertySets,Exception> t = OLEPropertySetStream.readOLEPropertySets(file, priority);
+						AsyncSupplier<OLEPropertySets,Exception> t = OLEPropertySetStream.readOLEPropertySets(file, priority);
 						synchronized (works) { works.add(t); }
-						Task<Void,Exception> t2 = new Task.Cpu<Void,Exception>("Reading SummaryInformation", priority) {
-							@Override
-							public Void run() throws Exception {
-								try {
-									if (t.hasError()) throw t.getError();
-									OLEPropertySets sets = t.getResult();
-									for (OLEPropertySet set : sets.propertySets) {
-										if (ArrayUtil.equals(set.FMTID, SummaryInformation.FMTID)) {
-											OLEProperty p = set.properties.get(new Long(SummaryInformation.TITLE));
-											if (p instanceof OLEProperty.Str) info.title = ((OLEProperty.Str)p).value; 
-											p = set.properties.get(new Long(SummaryInformation.AUTHOR));
-											if (p instanceof OLEProperty.Str) info.author = ((OLEProperty.Str)p).value; 
-											p = set.properties.get(new Long(SummaryInformation.LAST_AUTHOR));
-											if (p instanceof OLEProperty.Str) info.lastAuthor = ((OLEProperty.Str)p).value; 
-											p = set.properties.get(new Long(SummaryInformation.APPLICATION_NAME));
-											if (p instanceof OLEProperty.Str) info.application = ((OLEProperty.Str)p).value; 
-										}
+						Task<Void,Exception> t2 = Task.cpu("Reading SummaryInformation", priority, task -> {
+							try {
+								if (t.hasError()) throw t.getError();
+								OLEPropertySets sets = t.getResult();
+								for (OLEPropertySet set : sets.propertySets) {
+									if (ArrayUtil.equals(set.FMTID, SummaryInformation.FMTID)) {
+										OLEProperty p = set.properties.get(new Long(SummaryInformation.TITLE));
+										if (p instanceof OLEProperty.Str) info.title = ((OLEProperty.Str)p).value; 
+										p = set.properties.get(new Long(SummaryInformation.AUTHOR));
+										if (p instanceof OLEProperty.Str) info.author = ((OLEProperty.Str)p).value; 
+										p = set.properties.get(new Long(SummaryInformation.LAST_AUTHOR));
+										if (p instanceof OLEProperty.Str) info.lastAuthor = ((OLEProperty.Str)p).value; 
+										p = set.properties.get(new Long(SummaryInformation.APPLICATION_NAME));
+										if (p instanceof OLEProperty.Str) info.application = ((OLEProperty.Str)p).value; 
 									}
-									return null;
-								} finally {
-									jp.joined();
 								}
+								return null;
+							} finally {
+								jp.joined();
 							}
-						};
+						});
 						jp.addToJoin(1);
 						t2.startOn(t, true);
 						synchronized (works) { works.add(t2.getOutput()); }
 					} else if ("\u0005DocumentSummaryInformation".equals(name)) {
-						AsyncWork<OLEPropertySets,Exception> t = OLEPropertySetStream.readOLEPropertySets(file, priority);
+						AsyncSupplier<OLEPropertySets,Exception> t = OLEPropertySetStream.readOLEPropertySets(file, priority);
 						synchronized (works) { works.add(t); }
-						Task<Void,Exception> t2 = new Task.Cpu<Void,Exception>("Reading SummaryInformation", priority) {
-							@Override
-							public Void run() throws Exception {
-								try {
-									if (t.hasError()) throw t.getError();
-									OLEPropertySets sets = t.getResult();
-									for (OLEPropertySet set : sets.propertySets) {
-										if (ArrayUtil.equals(set.FMTID, DocumentSummaryInformation.FMTID)) {
-											OLEProperty p = set.properties.get(new Long(DocumentSummaryInformation.COMPANY));
-											if (p instanceof OLEProperty.Str) info.company = ((OLEProperty.Str)p).value; 
-											p = set.properties.get(new Long(DocumentSummaryInformation.SLIDE_COUNT));
-											if (p instanceof OLEProperty.Int) info.slides = new Integer(((OLEProperty.Int)p).value); 
-										}
+						Task<Void,Exception> t2 = Task.cpu("Reading SummaryInformation", priority, task -> {
+							try {
+								if (t.hasError()) throw t.getError();
+								OLEPropertySets sets = t.getResult();
+								for (OLEPropertySet set : sets.propertySets) {
+									if (ArrayUtil.equals(set.FMTID, DocumentSummaryInformation.FMTID)) {
+										OLEProperty p = set.properties.get(new Long(DocumentSummaryInformation.COMPANY));
+										if (p instanceof OLEProperty.Str) info.company = ((OLEProperty.Str)p).value; 
+										p = set.properties.get(new Long(DocumentSummaryInformation.SLIDE_COUNT));
+										if (p instanceof OLEProperty.Int) info.slides = new Integer(((OLEProperty.Int)p).value); 
 									}
-									return null;
-								} finally {
-									jp.joined();
 								}
+								return null;
+							} finally {
+								jp.joined();
 							}
-						};
+						});
 						jp.addToJoin(1);
 						t2.startOn(t, true);
 						synchronized (works) { works.add(t2.getOutput()); }
@@ -150,13 +143,10 @@ public class PowerPointFile_CFB_DataFormat extends CFBDataFormat {
 			}
 		};
 		CFBDataFormat.instance.listenSubData(data, listener);
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				synchronized (works) {
-					for (AsyncWork<?,?> w : works)
-						w.unblockCancel(event);
-				}
+		sp.onCancel(event -> {
+			synchronized (works) {
+				for (AsyncSupplier<?,?> w : works)
+					w.unblockCancel(event);
 			}
 		});
 		return sp;

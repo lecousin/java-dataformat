@@ -4,10 +4,10 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 import net.lecousin.framework.collections.AsyncCollection;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
-import net.lecousin.framework.util.StringUtil;
+import net.lecousin.framework.text.StringUtil;
 
 public class FAT32 extends FAT {
 
@@ -26,11 +26,11 @@ public class FAT32 extends FAT {
 		fatEntryBits = 32;
 		super.loadFirstSector(sector);
 		maxNbRootEntries = 0;
-		sectorsPerFat = DataUtil.readUnsignedIntegerLittleEndian(sector, 0x24);
-		serialNumber = DataUtil.readUnsignedIntegerLittleEndian(sector, 0x43);
+		sectorsPerFat = DataUtil.Read32U.LE.read(sector, 0x24);
+		serialNumber = DataUtil.Read32U.LE.read(sector, 0x43);
 		volumeLabel = new String(sector, 0x47, 11).trim();
 		dataRegionAddress = (reservedSectors + nbFat * sectorsPerFat) * bytesPerSector;
-		rootDirectoryCluster = DataUtil.readUnsignedIntegerLittleEndian(sector, 0x2C);
+		rootDirectoryCluster = DataUtil.Read32U.LE.read(sector, 0x2C);
 	}
 	
 	@Override
@@ -39,17 +39,17 @@ public class FAT32 extends FAT {
 	}
 
 	@Override
-	protected AsyncWork<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
+	protected AsyncSupplier<Long, IOException> getNextCluster(long cluster, byte[] buffer) {
 		long pos = reservedSectors * bytesPerSector;
 		pos += cluster * 4;
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buffer, 0, 4));
-		AsyncWork<Long, IOException> result = new AsyncWork<>();
-		read.listenInline((nb) -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(pos, ByteBuffer.wrap(buffer, 0, 4));
+		AsyncSupplier<Long, IOException> result = new AsyncSupplier<>();
+		read.onDone((nb) -> {
 			if (nb != 4) {
 				result.error(new IOException("Unexpected end of FAT file system"));
 				return;
 			}
-			long v = DataUtil.readUnsignedIntegerLittleEndian(buffer, 0);
+			long v = DataUtil.Read32U.LE.read(buffer, 0);
 			if (v >= 0x00000002 && v <= 0x0FFFFFEF)
 				result.unblockSuccess(Long.valueOf(v));
 			else if (v >= 0x0FFFFFF8)

@@ -1,10 +1,11 @@
 package net.lecousin.dataformat.archive.cfb;
 
+import java.io.IOException;
+
 import net.lecousin.dataformat.archive.cfb.CFBFile.CFBSubFile;
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.FragmentedSubIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -49,15 +50,15 @@ public class CFBSubFileData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO.Readable, Exception> openIOReadOnly(byte priority) {
-		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<CFBFile>,Exception> get = CFBDataFormat.cache.open(cfbData, this, priority/*, false*/, null, 0);
-		get.listenInline(new Runnable() {
+	protected AsyncSupplier<IO.Readable, IOException> openIOReadOnly(Priority priority) {
+		AsyncSupplier<IO.Readable, IOException> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<CFBFile>,Exception> get = CFBDataFormat.cache.open(cfbData, this, priority/*, false*/, null, 0);
+		get.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (get.isCancelled()) return;
 				if (!get.isSuccessful()) {
-					sp.unblockError(get.getError());
+					sp.unblockError(IO.error(get.getError()));
 					return;
 				}
 				CachedObject<CFBFile> cfb = get.getResult();
@@ -71,12 +72,7 @@ public class CFBSubFileData extends Data {
 				sp.unblockSuccess(io);
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				get.unblockCancel(event);
-			}
-		});
+		sp.onCancel(get::unblockCancel);
 		return sp;
 	}
 	
@@ -86,7 +82,7 @@ public class CFBSubFileData extends Data {
 	}
 	
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 }

@@ -9,10 +9,11 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.DataWrapperDataFormat;
 import net.lecousin.dataformat.core.MemoryData;
 import net.lecousin.dataformat.text.TextDataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.encoding.Base64Encoding;
+import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.encoding.Base64;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -42,20 +43,20 @@ public class Base64EncodedCertificateDataFormat extends TextDataFormat implement
 	}
 
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
 		long size = container.getSize();
 		if (size > 4 * 1024 * 1024)
-			return new AsyncWork<>(null, new Exception("Certificate is too big"));
-		AsyncWork<? extends IO, Exception> open = container.openReadOnly(Task.PRIORITY_NORMAL);
+			return new AsyncSupplier<>(null, new Exception("Certificate is too big"));
+		AsyncSupplier<? extends IO, IOException> open = container.openReadOnly(Task.Priority.NORMAL);
 		byte[] buffer = new byte[(int)size];
-		AsyncWork<Data, Exception> result = new AsyncWork<>();
+		AsyncSupplier<Data, Exception> result = new AsyncSupplier<>();
 		long stepOpen = work / 20;
 		long stepRead = work * 3 / 4;
 		long stepDecode = work - stepOpen - stepRead;
-		open.listenInline((io) -> {
+		open.onDone((io) -> {
 			progress.progress(stepOpen);
-			AsyncWork<Integer, IOException> read = ((IO.Readable)io).readFullyAsync(ByteBuffer.wrap(buffer));
-			read.listenAsyncSP(new Task.Cpu.FromRunnable("Extract certificate", Task.PRIORITY_NORMAL, () -> {
+			AsyncSupplier<Integer, IOException> read = ((IO.Readable)io).readFullyAsync(ByteBuffer.wrap(buffer));
+			read.thenStart(Task.cpu("Extract certificate", Task.Priority.NORMAL, (Task<Void, NoException> t) -> {
 				progress.progress(stepRead);
 				io.closeAsync();
 				// search end of line
@@ -63,7 +64,7 @@ public class Base64EncodedCertificateDataFormat extends TextDataFormat implement
 				while (buffer[start++] != '\n') {
 					if (start == buffer.length) {
 						result.error(new Exception("Invalid certificate"));
-						return;
+						return null;
 					}
 				}
 				int end = start;
@@ -80,16 +81,17 @@ public class Base64EncodedCertificateDataFormat extends TextDataFormat implement
 				}
 				progress.progress(stepDecode / 2);
 				try {
-					byte[] decoded = Base64.decode(buffer, start, end - removed - start);
+					byte[] decoded = Base64Encoding.instance.decode(buffer, start, end - removed - start);
 					progress.progress(stepDecode - stepDecode / 2);
 					// TODO localize
 					result.unblockSuccess(new MemoryData(container, decoded, new FixedLocalizedString("Certificate")));
 				} catch (Exception e) {
 					result.error(e);
 				}
-			}), result);
-		}, result);
-		result.listenInline(
+				return null;
+			}), result, e -> e);
+		}, result, e -> e);
+		result.onDone(
 			(data) -> {
 			},
 			(error) -> {

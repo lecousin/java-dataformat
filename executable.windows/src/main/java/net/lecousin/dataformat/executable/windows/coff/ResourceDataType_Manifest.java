@@ -1,16 +1,19 @@
 package net.lecousin.dataformat.executable.windows.coff;
 
+import java.io.IOException;
+
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.SimpleBufferedReadable;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
+import net.lecousin.framework.text.IString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
-import net.lecousin.framework.util.UnprotectedStringBuffer;
 import net.lecousin.framework.xml.XMLStreamEvents;
 import net.lecousin.framework.xml.XMLStreamReader;
 
@@ -22,10 +25,10 @@ public class ResourceDataType_Manifest implements DataFormat {
 	public ILocalizableString getName() { return new FixedLocalizedString("Side-by-side Assembly Manifest"); }
 	
 	@Override
-	public AsyncWork<ManifestDataInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<ManifestDataInfo, Exception> result = new AsyncWork<ManifestDataInfo, Exception>();
-		AsyncWork<? extends IO.Readable.Seekable,Exception> open = data.openReadOnly(priority);
-		open.listenInline(new Runnable() {
+	public AsyncSupplier<ManifestDataInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<ManifestDataInfo, Exception> result = new AsyncSupplier<ManifestDataInfo, Exception>();
+		AsyncSupplier<? extends IO.Readable.Seekable,IOException> open = data.openReadOnly(priority);
+		open.onDone(new Runnable() {
 			@SuppressWarnings("resource")
 			@Override
 			public void run() {
@@ -42,35 +45,32 @@ public class ResourceDataType_Manifest implements DataFormat {
 					bio = (IO.Readable.Buffered)io;
 				else
 					bio = new SimpleBufferedReadable(io, 4096);
-				AsyncWork<XMLStreamReader, Exception> xml = XMLStreamReader.start(bio, 1024, 8);
-				xml.listenAsync(new Task.Cpu<Void, NoException>("Read COFF manifest", priority) {
-					@Override
-					public Void run() {
-						if (xml.hasError()) result.unblockError(xml.getError());
-						else {
-							ManifestDataInfo manifest = new ManifestDataInfo();
-							XMLStreamReader xs = xml.getResult();
-							try {
-								while (!XMLStreamEvents.Event.Type.START_ELEMENT.equals(xs.event.type)) xs.next();
-								if (!xs.searchElement("assembly")) {
-									result.unblockError(new Exception("Invalid manifest"));
-								} else {
-									if (xs.nextInnerElement(xs.event.context.getFirst(), "assemblyIdentity")) {
-										UnprotectedStringBuffer s;
-										s = xs.getAttributeValueByLocalName("name");
-										manifest.assembly_name = s == null ? null : s.asString();
-										s = xs.getAttributeValueByLocalName("version");
-										manifest.assembly_version = s == null ? null : s.asString();
-									}
-									result.unblockSuccess(manifest);
+				AsyncSupplier<XMLStreamReader, Exception> xml = XMLStreamReader.start(bio, 1024, 8, false);
+				xml.thenStart("Read COFF manifest", priority, (Task<Void, NoException> t) -> {
+					if (xml.hasError()) result.unblockError(xml.getError());
+					else {
+						ManifestDataInfo manifest = new ManifestDataInfo();
+						XMLStreamReader xs = xml.getResult();
+						try {
+							while (!XMLStreamEvents.Event.Type.START_ELEMENT.equals(xs.event.type)) xs.next();
+							if (!xs.searchElement("assembly")) {
+								result.unblockError(new Exception("Invalid manifest"));
+							} else {
+								if (xs.nextInnerElement(xs.event.context.getFirst(), "assemblyIdentity")) {
+									IString s;
+									s = xs.getAttributeValueByLocalName("name");
+									manifest.assembly_name = s == null ? null : s.asString();
+									s = xs.getAttributeValueByLocalName("version");
+									manifest.assembly_version = s == null ? null : s.asString();
 								}
-							} catch (Exception e) {
-								result.unblockError(e);
+								result.unblockSuccess(manifest);
 							}
+						} catch (Exception e) {
+							result.unblockError(e);
 						}
-						io.closeAsync();
-						return null;
 					}
+					io.closeAsync();
+					return null;
 				}, true);
 			}
 		});

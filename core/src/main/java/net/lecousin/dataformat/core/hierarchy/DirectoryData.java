@@ -1,8 +1,11 @@
 package net.lecousin.dataformat.core.hierarchy;
 
+import java.io.IOException;
+
 import net.lecousin.dataformat.core.ContainerDataFormat;
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Readable.Seekable;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -35,7 +38,7 @@ public class DirectoryData extends Data implements IDirectoryData {
 	public Data getContainer() { return parent; }
 	
 	@Override
-	protected AsyncWork<Readable, ? extends Exception> openIOReadOnly(byte priority) {
+	protected AsyncSupplier<Readable, IOException> openIOReadOnly(Priority priority) {
 		return null;
 	}
 
@@ -45,7 +48,7 @@ public class DirectoryData extends Data implements IDirectoryData {
 	}
 
 	@Override
-	protected <T extends Seekable & net.lecousin.framework.io.IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends Seekable & net.lecousin.framework.io.IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		return null;
 	}
 	

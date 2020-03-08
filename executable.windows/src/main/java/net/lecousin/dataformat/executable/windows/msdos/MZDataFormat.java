@@ -6,7 +6,8 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.DataWrapperDataFormat;
 import net.lecousin.dataformat.core.SubData;
 import net.lecousin.dataformat.executable.windows.WinExeDataFormatPlugin;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
@@ -48,27 +49,27 @@ public class MZDataFormat implements DataWrapperDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo, ?> getInfo(Data data, byte priority) {
+	public AsyncSupplier<? extends DataFormatInfo, ?> getInfo(Data data, Priority priority) {
 		// TODO Auto-generated method stub
 		return null;
 	}
 	
 	@Override
-	public AsyncWork<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
+	public AsyncSupplier<Data, Exception> getWrappedData(Data container, WorkProgress progress, long work) {
 		SubData sd = (SubData)container.getProperty("MZSubData");
 		if (sd == null) {
 			Integer offset = (Integer)container.getProperty("MZDataOffset");
 			if (offset == null)
-				return new AsyncWork<>(null, null);
+				return new AsyncSupplier<>(null, null);
 			int off = offset.intValue();
 			long size = container.getSize();
 			if (off == size)
-				return new AsyncWork<>(null, null);
+				return new AsyncSupplier<>(null, null);
 			sd = new SubData(container, off, size-off, new LocalizableString("dataformat", "Content"));
 			container.setProperty("MZSubData", sd);
 		}
 		progress.progress(work);
-		return new AsyncWork<>(sd, null);
+		return new AsyncSupplier<>(sd, null);
 	}
 	
 	@Override

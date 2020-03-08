@@ -10,9 +10,10 @@ import net.lecousin.dataformat.core.DataCommonProperties;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.async.Async;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
@@ -46,11 +47,11 @@ public class CabDataFormat extends ArchiveDataFormat {
 	public static OpenedDataCache<CabFile> cache = new OpenedDataCache<CabFile>(CabFile.class, 5*60*1000) {
 
 		@Override
-		protected AsyncWork<CabFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<CabFile,Exception> open(Data data, IO.Readable io, WorkProgress progress, long work) {
 			CabFile cab = CabFile.openReadOnly(io, progress, work);
-			SynchronizationPoint<IOException> sp = cab.onLoaded();
-			AsyncWork<CabFile,Exception> result = new AsyncWork<>();
-			sp.listenInline(new Runnable() {
+			Async<IOException> sp = cab.onLoaded();
+			AsyncSupplier<CabFile,Exception> result = new AsyncSupplier<>();
+			sp.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (sp.hasError()) result.error(sp.getError());
@@ -74,10 +75,10 @@ public class CabDataFormat extends ArchiveDataFormat {
 	};
 
 	@Override
-	public AsyncWork<ArchiveDataInfo, Exception> getInfo(Data data, byte priority) {
-		AsyncWork<CachedObject<CabFile>, Exception> c = cache.open(data, this, priority, null, 0);
-		AsyncWork<ArchiveDataInfo, Exception> sp = new AsyncWork<>();
-		c.listenInline(new Runnable() {
+	public AsyncSupplier<ArchiveDataInfo, Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<CachedObject<CabFile>, Exception> c = cache.open(data, this, priority, null, 0);
+		AsyncSupplier<ArchiveDataInfo, Exception> sp = new AsyncSupplier<>();
+		c.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (c.hasError()) { sp.error(c.getError()); return; }
@@ -95,18 +96,18 @@ public class CabDataFormat extends ArchiveDataFormat {
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading CAB");
-		AsyncWork<CachedObject<CabFile>,Exception> get = cache.open(container, this, Task.PRIORITY_IMPORTANT, progress, 800);
-		new Task.Cpu.FromRunnable("Loading Rar", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<CabFile>,Exception> get = cache.open(container, this, Task.Priority.IMPORTANT, progress, 800);
+		Task.cpu("Loading CAB", Task.Priority.IMPORTANT, task -> {
 			if (get.hasError()) {
 				listener.error(get.getError());
 				progress.error(get.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error opening CAB file", get.getError());
-				return;
+				return null;
 			}
 			if (get.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			CabFile cab = get.getResult().get();
 			ArrayList<Data> subData = new ArrayList<>(cab.getFiles().size());
@@ -116,6 +117,7 @@ public class CabDataFormat extends ArchiveDataFormat {
 			listener.elementsReady(subData);
 			progress.done();
 			get.getResult().release(CabDataFormat.this);
+			return null;
 		}).startOn(get, true);
 		return progress;
 	}

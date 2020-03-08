@@ -17,11 +17,12 @@ import net.lecousin.dataformat.image.io.ScanLineHandler;
 import net.lecousin.dataformat.image.io.ScanLineReader;
 import net.lecousin.dataformat.image.png.PNGDataFormat;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.JoinPoint;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.async.JoinPoint;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.FragmentedSubIO;
 import net.lecousin.framework.io.IO;
@@ -36,12 +37,12 @@ import net.lecousin.framework.math.FragmentedRangeLong;
 public class PNGReader {
 
 	@SuppressWarnings("resource")
-	public static <T extends IO.Readable.Seekable&IO.KnownSize> AsyncWork<BufferedImage,Exception> readFromSeekable(T io) {
+	public static <T extends IO.Readable.Seekable&IO.KnownSize> AsyncSupplier<BufferedImage,Exception> readFromSeekable(T io) {
 		if (io instanceof IO.Readable.Buffered)
 			return readFromBuffered((IO.Readable.Seekable&IO.Readable.Buffered)io);
 		long size;
 		try { size = io.getSizeSync(); }
-		catch (IOException e) { return new AsyncWork<>(null, e); }
+		catch (IOException e) { return new AsyncSupplier<>(null, e); }
 		if (size <= 4096)
 			return readFromBuffered(new TwoBuffersIO.DeterminedSize(io, (int)size, 0)); // TODO we should load it and be able to read from memory without transfering bytes to new buffers
 		if (size <= 4096+8192)
@@ -51,9 +52,9 @@ public class PNGReader {
 		return readFromBuffered(new BufferedIO(io, size, 4096, 65536, true));
 	}
 	
-	public static <T extends IO.Readable.Seekable&IO.Readable.Buffered> AsyncWork<BufferedImage,Exception> readFromBuffered(T io) {
+	public static <T extends IO.Readable.Seekable&IO.Readable.Buffered> AsyncSupplier<BufferedImage,Exception> readFromBuffered(T io) {
 		Data<T> data = new Data<T>(io);
-		io.canStartReading().listenAsync(new ReadFileHeader<T>(data), true);
+		io.canStartReading().thenStart(Task.cpu("Start reading PNG data", data.io.getPriority(), new ReadFileHeader<T>(data)), true);
 		// TODO listen to cancel
 		return data.done;
 	}
@@ -63,7 +64,7 @@ public class PNGReader {
 			this.io = io;
 		}
 		private T io;
-		private AsyncWork<BufferedImage,Exception> done = new AsyncWork<BufferedImage,Exception>();
+		private AsyncSupplier<BufferedImage,Exception> done = new AsyncSupplier<BufferedImage,Exception>();
 		
 		// chunk buffer
 		private byte[] b8 = new byte[8];
@@ -80,18 +81,18 @@ public class PNGReader {
 		
 		// palette
 		private byte[] palette = null;
-		private AsyncWork<Integer, IOException> paletteLoading = null;
+		private AsyncSupplier<Integer, IOException> paletteLoading = null;
 		
 		// alpha
 		private byte[] transparency = null;
-		private AsyncWork<Integer, IOException> transparencyLoading = null;
+		private AsyncSupplier<Integer, IOException> transparencyLoading = null;
 		
 		// gamma
 		private byte[] gamma = null;
 		
 		// data
 		private FragmentedRangeLong IDAT = new FragmentedRangeLong();
-		private AsyncWork<ICC_Profile,Exception> ICCProfile = null;
+		private AsyncSupplier<ICC_Profile,Exception> ICCProfile = null;
 		private boolean sRGB, IEND = false;
 		
 		private int bytesPerPixel;
@@ -100,14 +101,13 @@ public class PNGReader {
 		private Task<ImageReader,NoException> prepareBufferedImage;
 	}
 	
-	private static class ReadFileHeader<T extends IO.Readable.Seekable&IO.Readable.Buffered> extends Task.Cpu<Void, NoException> {
+	private static class ReadFileHeader<T extends IO.Readable.Seekable&IO.Readable.Buffered> implements Executable<Void, NoException> {
 		private ReadFileHeader(Data<T> data) {
-			super("Start reading PNG data", data.io.getPriority());
 			this.data = data;
 		}
 		private Data<T> data;
 		@Override
-		public Void run() {
+		public Void execute(Task<Void, NoException> task) {
 			// IO is buffered, the beginning can be done without synchronization (supposed to be around 40 bytes)
 			try {
 				if (data.io.readFully(data.b8) != 8) {
@@ -130,7 +130,7 @@ public class PNGReader {
 					data.done.unblockError(new Exception("Not PNG format"));
 					return null;
 				}
-				long size = DataUtil.readUnsignedIntegerBigEndian(data.b8, 0);
+				long size = DataUtil.Read32U.BE.read(data.b8, 0);
 				if (data.b8[4] != 'I' ||
 					data.b8[5] != 'H' ||
 					data.b8[6] != 'D' ||
@@ -143,8 +143,8 @@ public class PNGReader {
 					data.done.unblockError(new Exception("Not PNG format"));
 					return null;
 				}
-				data.width = DataUtil.readIntegerBigEndian(data.b8, 0);
-				data.height = DataUtil.readIntegerBigEndian(data.b8, 4);
+				data.width = DataUtil.Read32.BE.read(data.b8, 0);
+				data.height = DataUtil.Read32.BE.read(data.b8, 4);
 				data.bitDepth = data.io.readByte();
 				data.colourType = data.io.readByte();
 				data.compressionMethod = data.io.readByte();
@@ -160,8 +160,8 @@ public class PNGReader {
 
 	private static <T extends IO.Readable.Seekable&IO.Readable.Buffered> boolean readNextChunk(Data<T> data, long pos, ReadChunk<T> reader) {
 		data.bb8.clear();
-		AsyncWork<Integer, IOException> read = data.io.readFullyAsync(pos, data.bb8);
-		if (read.isUnblocked() && read.isSuccessful()) {
+		AsyncSupplier<Integer, IOException> read = data.io.readFullyAsync(pos, data.bb8);
+		if (read.isDone() && read.isSuccessful()) {
 			// do not start a task
 			int nb = read.getResult().intValue();
 			if (nb <= 0) {
@@ -178,10 +178,10 @@ public class PNGReader {
 				reader.pos = pos+8;
 				return true;
 			} else
-				new ReadChunk<T>(data, pos+8).run();
+				new ReadChunk<T>(data, pos+8).execute(null);
 			return false;
 		}
-		read.listenInline(new AsyncWorkListener<Integer, IOException>() {
+		read.listen(new Listener<Integer, IOException>() {
 			@Override
 			public void ready(Integer result) {
 				if (result.intValue() <= 0) {
@@ -195,7 +195,7 @@ public class PNGReader {
 						return;
 					}
 				} else
-					new ReadChunk<T>(data, pos+8).start();
+					readChunkTask(data, pos+8).start();
 			}
 			@Override
 			public void error(IOException error) {
@@ -227,19 +227,22 @@ public class PNGReader {
 	private static final int tRNS = ('t'<<24) | ('R'<<16) | ('N'<<8) | 'S';
 	private static final int gAMA = ('g'<<24) | ('A'<<16) | ('M'<<8) | 'A';
 	
-	private static class ReadChunk<T extends IO.Readable.Seekable&IO.Readable.Buffered> extends Task.Cpu<Void, NoException> {
+	private static <T extends IO.Readable.Seekable&IO.Readable.Buffered> Task<Void, NoException> readChunkTask(Data<T> data, long pos) {
+		return Task.cpu("Read chunk in PNG data", data.io.getPriority(), new ReadChunk<T>(data, pos));
+	}
+	
+	private static class ReadChunk<T extends IO.Readable.Seekable&IO.Readable.Buffered> implements Executable<Void, NoException> {
 		private ReadChunk(Data<T> data, long pos) {
-			super("Read chunk in PNG data", data.io.getPriority());
 			this.data = data;
 			this.pos = pos;
 		}
 		private Data<T> data;
 		private long pos;
 		@Override
-		public Void run() {
+		public Void execute(Task<Void, NoException> task) {
 			do {
-				long size = DataUtil.readUnsignedIntegerBigEndian(data.b8, 0);
-				int type = DataUtil.readIntegerBigEndian(data.b8, 4);
+				long size = DataUtil.Read32U.BE.read(data.b8, 0);
+				int type = DataUtil.Read32.BE.read(data.b8, 4);
 				switch (type) {
 				case iCCP:
 					if (data.sRGB) { data.done.unblockError(new Exception("Invalid PNG format: iCCP cannot be present together with sRGB")); return null; }
@@ -330,13 +333,13 @@ public class PNGReader {
 						io = new FragmentedSubIO.Readable(data.io, data.IDAT, false, "PNG image data: "+data.io.getSourceDescription());
 					IO.Readable.Buffered idata = uncompress(io, data.compressionMethod, data.scanner.getBytesToReadPerLine(data.width, data.bitsPerPixel)*data.height);
 					
-					JoinPoint<Exception> jp = JoinPoint.fromSynchronizationPoints(idata.canStartReading(), data.prepareBufferedImage.getOutput());
-					jp.listenInline(new Runnable() {
+					JoinPoint<Exception> jp = JoinPoint.from(idata.canStartReading(), data.prepareBufferedImage.getOutput());
+					jp.onDone(new Runnable() {
 						@Override
 						public void run() {
-							if (data.prepareBufferedImage.getResult() == null) return;
-							AsyncWork<BufferedImage,Exception> read = data.prepareBufferedImage.getResult().read(idata);
-							read.listenInline(new AsyncWorkListener<BufferedImage, Exception>() {
+							if (data.prepareBufferedImage.getOutput().getResult() == null) return;
+							AsyncSupplier<BufferedImage,Exception> read = data.prepareBufferedImage.getOutput().getResult().read(idata);
+							read.listen(new Listener<BufferedImage, Exception>() {
 								@Override
 								public void ready(BufferedImage result) {
 									// TODO apply ICC Profile if any
@@ -403,152 +406,139 @@ public class PNGReader {
 			return false;
 		}
 		
-		ArrayList<ISynchronizationPoint<IOException>> toWait = new ArrayList<>(2);
-		if (data.colourType != 3 && data.transparency != null && data.transparencyLoading != null && !data.transparencyLoading.isUnblocked())
+		ArrayList<IAsync<IOException>> toWait = new ArrayList<>(2);
+		if (data.colourType != 3 && data.transparency != null && data.transparencyLoading != null && !data.transparencyLoading.isDone())
 			toWait.add(data.transparencyLoading);
-		data.prepareBufferedImage = new Task.Cpu<ImageReader, NoException>("Prepare BufferedImage from PNG", data.io.getPriority()) {
-			@Override
-			public ImageReader run() {
-				GammaCorrection gamma = null;
-				if (data.gamma != null && !data.sRGB && data.ICCProfile == null)
-					gamma = new GammaCorrection(((double)DataUtil.readUnsignedIntegerBigEndian(data.gamma, 0))/100000);
-				try {
-					ImageReader reader;
-					switch (data.colourType) {
-					case 0: { // Greyscale
-						int transparentPixel = data.transparency != null ? DataUtil.readUnsignedShortBigEndian(data.transparency, 0) : -1;
-						if (data.interlaceMethod == 0)
-							reader = ScanLineReader.createGreyscale(data.width, data.height, data.bitDepth, transparentPixel, gamma, data.scanner, false, data.io.getPriority());
-						else if (data.interlaceMethod == 1)
-							reader = Adam7ScanLineReader.createGreyscale(data.width, data.height, data.bitDepth, transparentPixel, gamma, false, data.scanner, data.io.getPriority());
-						else
-							throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
-						break; }
-					case 2: { // True color
-						int transparentR = -1, transparentG = -1, transparentB = -1;
-						if (data.transparency != null) {
-							transparentR = DataUtil.readUnsignedShortBigEndian(data.transparency, 0);
-							transparentG = DataUtil.readUnsignedShortBigEndian(data.transparency, 2);
-							transparentB = DataUtil.readUnsignedShortBigEndian(data.transparency, 4);
-						}
-						if (data.interlaceMethod == 0)
-							reader = ScanLineReader.createTrueColor(data.width, data.height, data.bitDepth, transparentR, transparentG, transparentB, gamma, data.scanner, false, data.io.getPriority());
-						else if (data.interlaceMethod == 1)
-							reader = Adam7ScanLineReader.createTrueColor(data.width, data.height, data.bitDepth, transparentR, transparentG, transparentB, gamma, false, data.scanner, data.io.getPriority());
-						else
-							throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
-						break; }
-					case 3: { // Indexed color
-						GammaCorrection _gamma = gamma;
-						Task<IndexColorModel, Exception> createCM = new Task.Cpu<IndexColorModel, Exception>("Create IndexColorModel from PNG", data.io.getPriority()) {
-							@Override
-							public IndexColorModel run() {
-								// TODO can improve by instantiating IndexColorModel with the palette data directly
-								int nbEntries = data.palette.length/3;
-								byte[] r = new byte[nbEntries];
-								byte[] g = new byte[nbEntries];
-								byte[] b = new byte[nbEntries];
-								for (int i = 0; i < nbEntries; ++i) {
-									r[i] = data.palette[i*3];
-									g[i] = data.palette[i*3+1];
-									b[i] = data.palette[i*3+2];
-									if (_gamma != null) {
-										r[i] = (byte)_gamma.modifyPixelSample(r[i]&0xFF, 8);
-										g[i] = (byte)_gamma.modifyPixelSample(g[i]&0xFF, 8);
-										b[i] = (byte)_gamma.modifyPixelSample(b[i]&0xFF, 8);
-									}
-								}
-								byte[] a;
-								if (data.transparency != null) {
-									a = new byte[nbEntries];
-									for (int i = 0; i < nbEntries; ++i)
-										a[i] = i < data.transparency.length ? data.transparency[i] : (byte)255;
-								} else
-									a = null;
-								return new IndexColorModel(data.bitDepth, r.length, r, g, b, a);
-							}
-						};
-						createCM.startOn(false, data.paletteLoading, data.transparencyLoading);
-						if (data.interlaceMethod == 0)
-							reader = ScanLineReader.createIndexed(data.width, data.height, data.bitDepth, createCM.getOutput(), data.scanner);
-						else if (data.interlaceMethod == 1)
-							reader = Adam7ScanLineReader.createIndexed(data.width, data.height, data.bitDepth, createCM.getOutput(), false, data.scanner);
-						else
-							throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
-						break; }
-					case 4: { // Greyscale with alpha
-						if (data.interlaceMethod == 0)
-							reader = ScanLineReader.createGreyscaleWithAlpha(data.width, data.height, data.bitDepth, gamma, data.scanner, false, data.io.getPriority());
-						else if (data.interlaceMethod == 1)
-							reader = Adam7ScanLineReader.createGreyscaleWithAlpha(data.width, data.height, data.bitDepth, gamma, false, data.scanner, data.io.getPriority());
-						else
-							throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
-						break; }
-					case 6: { // True color with alpha
-						if (data.interlaceMethod == 0)
-							reader = ScanLineReader.createRGBA(data.width, data.height, data.bitDepth, gamma, data.scanner, false, data.io.getPriority());
-						else if (data.interlaceMethod == 1)
-							reader = Adam7ScanLineReader.createRGBA(data.width, data.height, data.bitDepth, gamma, false, data.scanner, data.io.getPriority());
-						else
-							throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
-						break; }
-					default:
-						throw new InvalidImage("Unknown PNG color type "+data.colourType);
+		data.prepareBufferedImage = Task.cpu("Prepare BufferedImage from PNG", data.io.getPriority(), t -> {
+			GammaCorrection gamma = null;
+			if (data.gamma != null && !data.sRGB && data.ICCProfile == null)
+				gamma = new GammaCorrection(((double)DataUtil.Read32U.BE.read(data.gamma, 0))/100000);
+			try {
+				ImageReader reader;
+				switch (data.colourType) {
+				case 0: { // Greyscale
+					int transparentPixel = data.transparency != null ? DataUtil.Read16U.BE.read(data.transparency, 0) : -1;
+					if (data.interlaceMethod == 0)
+						reader = ScanLineReader.createGreyscale(data.width, data.height, data.bitDepth, transparentPixel, gamma, data.scanner, false, data.io.getPriority());
+					else if (data.interlaceMethod == 1)
+						reader = Adam7ScanLineReader.createGreyscale(data.width, data.height, data.bitDepth, transparentPixel, gamma, false, data.scanner, data.io.getPriority());
+					else
+						throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
+					break; }
+				case 2: { // True color
+					int transparentR = -1, transparentG = -1, transparentB = -1;
+					if (data.transparency != null) {
+						transparentR = DataUtil.Read16U.BE.read(data.transparency, 0);
+						transparentG = DataUtil.Read16U.BE.read(data.transparency, 2);
+						transparentB = DataUtil.Read16U.BE.read(data.transparency, 4);
 					}
-					return reader;
-				} catch (Exception e) {
-					data.done.unblockError(e);
-					return null;
+					if (data.interlaceMethod == 0)
+						reader = ScanLineReader.createTrueColor(data.width, data.height, data.bitDepth, transparentR, transparentG, transparentB, gamma, data.scanner, false, data.io.getPriority());
+					else if (data.interlaceMethod == 1)
+						reader = Adam7ScanLineReader.createTrueColor(data.width, data.height, data.bitDepth, transparentR, transparentG, transparentB, gamma, false, data.scanner, data.io.getPriority());
+					else
+						throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
+					break; }
+				case 3: { // Indexed color
+					GammaCorrection _gamma = gamma;
+					Task<IndexColorModel, Exception> createCM = Task.cpu("Create IndexColorModel from PNG", data.io.getPriority(), task -> {
+						// TODO can improve by instantiating IndexColorModel with the palette data directly
+						int nbEntries = data.palette.length/3;
+						byte[] r = new byte[nbEntries];
+						byte[] g = new byte[nbEntries];
+						byte[] b = new byte[nbEntries];
+						for (int i = 0; i < nbEntries; ++i) {
+							r[i] = data.palette[i*3];
+							g[i] = data.palette[i*3+1];
+							b[i] = data.palette[i*3+2];
+							if (_gamma != null) {
+								r[i] = (byte)_gamma.modifyPixelSample(r[i]&0xFF, 8);
+								g[i] = (byte)_gamma.modifyPixelSample(g[i]&0xFF, 8);
+								b[i] = (byte)_gamma.modifyPixelSample(b[i]&0xFF, 8);
+							}
+						}
+						byte[] a;
+						if (data.transparency != null) {
+							a = new byte[nbEntries];
+							for (int i = 0; i < nbEntries; ++i)
+								a[i] = i < data.transparency.length ? data.transparency[i] : (byte)255;
+						} else
+							a = null;
+						return new IndexColorModel(data.bitDepth, r.length, r, g, b, a);
+					});
+					createCM.startOn(false, data.paletteLoading, data.transparencyLoading);
+					if (data.interlaceMethod == 0)
+						reader = ScanLineReader.createIndexed(data.width, data.height, data.bitDepth, createCM.getOutput(), data.scanner);
+					else if (data.interlaceMethod == 1)
+						reader = Adam7ScanLineReader.createIndexed(data.width, data.height, data.bitDepth, createCM.getOutput(), false, data.scanner);
+					else
+						throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
+					break; }
+				case 4: { // Greyscale with alpha
+					if (data.interlaceMethod == 0)
+						reader = ScanLineReader.createGreyscaleWithAlpha(data.width, data.height, data.bitDepth, gamma, data.scanner, false, data.io.getPriority());
+					else if (data.interlaceMethod == 1)
+						reader = Adam7ScanLineReader.createGreyscaleWithAlpha(data.width, data.height, data.bitDepth, gamma, false, data.scanner, data.io.getPriority());
+					else
+						throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
+					break; }
+				case 6: { // True color with alpha
+					if (data.interlaceMethod == 0)
+						reader = ScanLineReader.createRGBA(data.width, data.height, data.bitDepth, gamma, data.scanner, false, data.io.getPriority());
+					else if (data.interlaceMethod == 1)
+						reader = Adam7ScanLineReader.createRGBA(data.width, data.height, data.bitDepth, gamma, false, data.scanner, data.io.getPriority());
+					else
+						throw new InvalidImage("Unknown interlace method for PNG: "+data.interlaceMethod);
+					break; }
+				default:
+					throw new InvalidImage("Unknown PNG color type "+data.colourType);
 				}
+				return reader;
+			} catch (Exception e) {
+				data.done.unblockError(e);
+				return null;
 			}
-		};
+		});
 		if (toWait.isEmpty())
 			data.prepareBufferedImage.start();
 		else
-			JoinPoint.fromSynchronizationPoints(toWait).listenAsync(data.prepareBufferedImage, true);
+			JoinPoint.from(toWait).thenStart(data.prepareBufferedImage, true);
 		return true;
 	}
 	
-	private static <T extends IO.Readable.Seekable&IO.Readable.Buffered> AsyncWork<ICC_Profile,Exception> readICCProfile(Data<T> data, long pos, long size) {
-		AsyncWork<ICC_Profile,Exception> done = new AsyncWork<>();
+	private static <T extends IO.Readable.Seekable&IO.Readable.Buffered> AsyncSupplier<ICC_Profile,Exception> readICCProfile(Data<T> data, long pos, long size) {
+		AsyncSupplier<ICC_Profile,Exception> done = new AsyncSupplier<>();
 		ByteBuffer b = ByteBuffer.allocate(81);
-		AsyncWork<Integer,IOException> read = data.io.readFullyAsync(pos, b);
-		read.listenAsync(new Task.Cpu<Void,NoException>("Read iCCP chunk in PNG", data.io.getPriority()) {
-			@SuppressWarnings("resource")
-			@Override
-			public Void run() {
-				if (read.isCancelled()) { done.unblockCancel(read.getCancelEvent()); return null; }
-				if (!read.isSuccessful()) { done.unblockError(read.getError()); return null; }
-				b.flip();
-				int i;
-				for (i = 0; b.hasRemaining(); ++i)
-					if (b.get() == 0) break;
-				if (!b.hasRemaining()) {
-					done.unblockError(new Exception("Invalid PNG format: iCCP chunk is invalid"));
-					return null;
-				}
-				byte comp = b.get();
-				SubIO.Readable.Seekable subio = new SubIO.Readable.Seekable(data.io, pos+i+2, size-(i+2), "ICC Profile in PNG: "+data.io.getSourceDescription(), false);
-				IO.Readable.Buffered io = uncompress(subio, comp, -1);
-				if (io == null) {
-					done.unblockError(new Exception("Compression method "+comp+" not supported in PNG format"));
-					return null;
-				}
-				io.canStartReading().listenAsync(new Task.Cpu<Void, NoException>("Reading ICC Profile in PNG",data.io.getPriority()) {
-					@Override
-					public Void run() {
-						InputStream in = IOAsInputStream.get(io, true);
-						try {
-							ICC_Profile profile = ICC_Profile.getInstance(in);
-							done.unblockSuccess(profile);
-						} catch (Exception e) {
-							done.unblockError(e);
-						}
-						return null;
-					}
-				}, true);
+		AsyncSupplier<Integer,IOException> read = data.io.readFullyAsync(pos, b);
+		read.thenStart("Read iCCP chunk in PNG", data.io.getPriority(), (Task<Void, NoException> task1) -> {
+			if (read.isCancelled()) { done.unblockCancel(read.getCancelEvent()); return null; }
+			if (!read.isSuccessful()) { done.unblockError(read.getError()); return null; }
+			b.flip();
+			int i;
+			for (i = 0; b.hasRemaining(); ++i)
+				if (b.get() == 0) break;
+			if (!b.hasRemaining()) {
+				done.unblockError(new Exception("Invalid PNG format: iCCP chunk is invalid"));
 				return null;
 			}
+			byte comp = b.get();
+			SubIO.Readable.Seekable subio = new SubIO.Readable.Seekable(data.io, pos+i+2, size-(i+2), "ICC Profile in PNG: "+data.io.getSourceDescription(), false);
+			IO.Readable.Buffered io = uncompress(subio, comp, -1);
+			if (io == null) {
+				done.unblockError(new Exception("Compression method "+comp+" not supported in PNG format"));
+				return null;
+			}
+			io.canStartReading().thenStart("Reading ICC Profile in PNG",data.io.getPriority(), (Task<Void, NoException> task2) -> {
+				InputStream in = IOAsInputStream.get(io, true);
+				try {
+					ICC_Profile profile = ICC_Profile.getInstance(in);
+					done.unblockSuccess(profile);
+				} catch (Exception e) {
+					done.unblockError(e);
+				}
+				return null;
+			}, true);
+			return null;
 		}, true);
 		return done;
 	}
@@ -561,7 +551,7 @@ public class PNGReader {
 	}
 	@SuppressWarnings("resource")
 	private static IO.Readable.Buffered uncompressZlib(IO.Readable io, int expectedUncompressedSize) {
-		DeflateReadable unc = new DeflateReadable(io, io.getPriority(), false);
+		DeflateReadable unc = new DeflateReadable(io, io.getPriority(), false, 8192);
 		if (expectedUncompressedSize > 0) {
 			if (expectedUncompressedSize < 5000)
 				return new TwoBuffersIO(unc, 512, expectedUncompressedSize);

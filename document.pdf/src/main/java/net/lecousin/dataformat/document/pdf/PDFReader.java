@@ -2,10 +2,8 @@ package net.lecousin.dataformat.document.pdf;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.operations.DataFormatReadOperation;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.memory.CachedObject;
@@ -53,10 +51,10 @@ public class PDFReader implements DataFormatReadOperation.OneToOne<PDFDataFormat
 	}
 	
 	@Override
-	public AsyncWork<Pair<PDDocument,Object>,Exception> execute(Data data, Object params, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Pair<PDDocument,Object>,Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<PDDocument>,Exception> pdf = PDFDataFormat.cache.open(data, this, priority, progress, work);
-		pdf.listenInline(new Runnable() {
+	public AsyncSupplier<Pair<PDDocument,Object>,Exception> execute(Data data, Object params, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Pair<PDDocument,Object>,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<PDDocument>,Exception> pdf = PDFDataFormat.cache.open(data, this, priority, progress, work);
+		pdf.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (pdf.isCancelled()) return;
@@ -75,19 +73,14 @@ public class PDFReader implements DataFormatReadOperation.OneToOne<PDFDataFormat
 				sp.unblockSuccess(new Pair<>(doc,null));
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				pdf.unblockCancel(event);
-			}
-		});
+		sp.onCancel(pdf::cancel);
 		return sp;
 	}
 	
 	@Override
 	public void release(Data data, Pair<PDDocument,Object> output) {
-		AsyncWork<CachedObject<PDDocument>,Exception> pdf = PDFDataFormat.cache.open(data, this, Task.PRIORITY_LOW, null, 0);
-		pdf.listenInline(new Runnable() {
+		AsyncSupplier<CachedObject<PDDocument>,Exception> pdf = PDFDataFormat.cache.open(data, this, Priority.LOW, null, 0);
+		pdf.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (pdf.isSuccessful()) {

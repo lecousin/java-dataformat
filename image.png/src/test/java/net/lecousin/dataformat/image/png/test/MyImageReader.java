@@ -7,8 +7,8 @@ import java.util.List;
 import net.lecousin.dataformat.image.png.io.PNGReader;
 import net.lecousin.dataformat.image.test.NamedTest;
 import net.lecousin.dataformat.image.test.TestImageReader;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.io.FileIO;
 
 public class MyImageReader implements TestImageReader, NamedTest<List<File>> {
@@ -20,8 +20,8 @@ public class MyImageReader implements TestImageReader, NamedTest<List<File>> {
 	
 	@Override
 	public BufferedImage read(File file) {
-		try (FileIO.ReadOnly io = new FileIO.ReadOnly(file, Task.PRIORITY_NORMAL)) {
-			AsyncWork<BufferedImage,Exception> read = PNGReader.readFromSeekable(io);
+		try (FileIO.ReadOnly io = new FileIO.ReadOnly(file, Task.Priority.NORMAL)) {
+			AsyncSupplier<BufferedImage,Exception> read = PNGReader.readFromSeekable(io);
 			read.blockThrow(0);
 			return read.getResult();
 		} catch (Throwable e) {

@@ -8,10 +8,10 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.microsoft.MicrosoftAbstractDataFormat;
 import net.lecousin.dataformat.microsoft.ole.OLEProperty.CodePages;
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.buffering.PreBufferedReadable;
 import net.lecousin.framework.io.util.DataUtil;
@@ -39,15 +39,15 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 	}
 	
 	@Override
-	public AsyncWork<OLEPropertySets,Exception> getInfo(Data data, byte priority) {
+	public AsyncSupplier<OLEPropertySets,Exception> getInfo(Data data, Priority priority) {
 		return readOLEPropertySets(data, priority);
 	}
 	
 	@SuppressWarnings("resource")
-	public static AsyncWork<OLEPropertySets,Exception> readOLEPropertySets(Data data, byte priority) {
-		AsyncWork<OLEPropertySets,Exception> sp = new AsyncWork<>();
-		AsyncWork<? extends IO.Readable.Seekable, Exception> open = data.openReadOnly(priority);
-		open.listenInline(new Runnable() {
+	public static AsyncSupplier<OLEPropertySets,Exception> readOLEPropertySets(Data data, Priority priority) {
+		AsyncSupplier<OLEPropertySets,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<? extends IO.Readable.Seekable, IOException> open = data.openReadOnly(priority);
+		open.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (open.isCancelled()) return;
@@ -57,50 +57,43 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 				}
 				@SuppressWarnings("cast")
 				IO.Readable.Buffered io = new PreBufferedReadable((IO.Readable)open.getResult(), 512, priority, 4096, priority, 8);
-				Reader r = new Reader(io, priority);
+				Task<OLEPropertySets,IOException> r = taskReader(io, priority);
 				r.startOn(io.canStartReading(), false);
-				r.getOutput().listenInline(new Runnable() {
+				r.getOutput().onDone(new Runnable() {
 					@Override
 					public void run() {
 						io.closeAsync();
 						if (r.isCancelled()) return;
 						if (r.isSuccessful())
-							sp.unblockSuccess(r.getResult());
+							sp.unblockSuccess(r.getOutput().getResult());
 						else
-							sp.unblockError(r.getError());
+							sp.unblockError(r.getOutput().getError());
 					}
 				});
-				sp.onCancel(new Listener<CancelException>() {
-					@Override
-					public void fire(CancelException event) {
-						r.cancel(event);
-					}
-				});
+				sp.onCancel(r::cancel);
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				open.unblockCancel(event);
-			}
-		});
+		sp.onCancel(open::cancel);
 		return sp;
 	}
 	
-	public static class Reader extends Task.Cpu<OLEPropertySets,IOException> {
-		public Reader(IO.Readable.Buffered io, byte priority) {
-			super("Read OLE Property Set", priority);
+	public static Task<OLEPropertySets,IOException> taskReader(IO.Readable.Buffered io, Priority priority) {
+		return Task.cpu("Read OLE Property Set", priority, new Reader(io));
+	}
+	
+	public static class Reader implements Executable<OLEPropertySets,IOException> {
+		public Reader(IO.Readable.Buffered io) {
 			this.io = io;
 		}
 		private IO.Readable.Buffered io;
 		@Override
-		public OLEPropertySets run() throws IOException {
+		public OLEPropertySets execute(Task<OLEPropertySets,IOException> taskContext) throws IOException {
 			OLEPropertySets sets = new OLEPropertySets();
 			io.skip(4);
-			sets.systemIdentifier = DataUtil.readUnsignedIntegerLittleEndian(io);
+			sets.systemIdentifier = DataUtil.Read32U.LE.read(io);
 			sets.CLSID = new byte[16];
 			io.readFully(sets.CLSID);
-			long nbSets = DataUtil.readUnsignedIntegerLittleEndian(io);
+			long nbSets = DataUtil.Read32U.LE.read(io);
 			// normally, maximum is 2, we will support up to 256
 			if (nbSets > 256) nbSets = 256;
 			long[] offsets = new long[(int)nbSets];
@@ -110,7 +103,7 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 				sets.propertySets.add(set);
 				set.FMTID = new byte[16];
 				io.readFully(set.FMTID);
-				offsets[i] = DataUtil.readUnsignedIntegerLittleEndian(io);
+				offsets[i] = DataUtil.Read32U.LE.read(io);
 				pos += 0x14;
 			}
 			do {
@@ -124,16 +117,16 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 				pos = offsets[next];
 				OLEPropertySet set = sets.propertySets.get(next);
 				
-				/*long size =*/ DataUtil.readUnsignedIntegerLittleEndian(io);
-				long nb = DataUtil.readUnsignedIntegerLittleEndian(io);
+				/*long size =*/ DataUtil.Read32U.LE.read(io);
+				long nb = DataUtil.Read32U.LE.read(io);
 				pos += 8;
 				// limit the number of properties
 				if (nb > 65536) nb = 65536;
 				long[] propertiesIds = new long[(int)nb];
 				long[] propertiesOffsets = new long[(int)nb];
 				for (int i = 0; i < nb; ++i) {
-					propertiesIds[i] = DataUtil.readUnsignedIntegerLittleEndian(io);
-					propertiesOffsets[i] = DataUtil.readUnsignedIntegerLittleEndian(io);
+					propertiesIds[i] = DataUtil.Read32U.LE.read(io);
+					propertiesOffsets[i] = DataUtil.Read32U.LE.read(io);
 					pos += 8;
 				}
 				for (int i = 0; i < nb; ++i) {
@@ -143,13 +136,13 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 					if (propertiesIds[i] == 0) {
 						// Dictionary property
 						set.propertiesNames = new HashMap<>();
-						long numEntries = DataUtil.readUnsignedIntegerLittleEndian(io);
+						long numEntries = DataUtil.Read32U.LE.read(io);
 						pos += 4;
 						// limit to 65536
 						if (numEntries > 65536) numEntries = 65536;
 						for (int entryIndex = 0; entryIndex < numEntries; ++entryIndex) {
-							long id = DataUtil.readUnsignedIntegerLittleEndian(io);
-							long len = DataUtil.readUnsignedIntegerLittleEndian(io);
+							long id = DataUtil.Read32U.LE.read(io);
+							long len = DataUtil.Read32U.LE.read(io);
 							pos += 8;
 							OLEProperty codepage = set.properties.get(new Long(OLEProperty.IDS.CODEPAGE));
 							if (codepage instanceof OLEProperty.Short && ((OLEProperty.Short)codepage).value == OLEProperty.CodePages.CP_UTF16) {
@@ -166,7 +159,7 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 						}
 					} else {
 						// Typed property entry
-						int type = DataUtil.readUnsignedShortLittleEndian(io);
+						int type = DataUtil.Read16U.LE.read(io);
 						io.skip(2);
 						pos += 4;
 						OLEProperty prop;
@@ -178,28 +171,28 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							prop = new OLEProperty.Null();
 							break;
 						case 0x0002: // short
-							prop = new OLEProperty.Short(DataUtil.readShortLittleEndian(io));
+							prop = new OLEProperty.Short(DataUtil.Read16.LE.read(io));
 							io.skip(2);
 							pos += 4;
 							break;
 						case 0x0003: case 0x0016: // int
-							prop = new OLEProperty.Int(DataUtil.readIntegerLittleEndian(io));
+							prop = new OLEProperty.Int(DataUtil.Read32.LE.read(io));
 							pos += 4;
 							break;
 						case 0x0004: // float
-							prop = new OLEProperty.Float(Float.intBitsToFloat(DataUtil.readIntegerLittleEndian(io)));
+							prop = new OLEProperty.Float(Float.intBitsToFloat(DataUtil.Read32.LE.read(io)));
 							pos += 4;
 							break;
 						case 0x0005: // double
-							prop = new OLEProperty.Double(Double.longBitsToDouble(DataUtil.readLongLittleEndian(io)));
+							prop = new OLEProperty.Double(Double.longBitsToDouble(DataUtil.Read64.LE.read(io)));
 							pos += 8;
 							break;
 						case 0x0006: // currency
-							prop = new OLEProperty.Currency(((double)DataUtil.readLongLittleEndian(io))/10000);
+							prop = new OLEProperty.Currency(((double)DataUtil.Read64.LE.read(io))/10000);
 							pos += 8;
 							break;
 						case 0x0007: { // date
-							double v = Double.longBitsToDouble(DataUtil.readLongLittleEndian(io));
+							double v = Double.longBitsToDouble(DataUtil.Read64.LE.read(io));
 							Calendar c = Calendar.getInstance();
 							c.set(Calendar.YEAR, 0);
 							c.set(Calendar.MONTH, 0);
@@ -226,7 +219,7 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							pos += 8;
 							break; }
 						case 0x0008: case 0x001E: { // code page string
-							long len = DataUtil.readUnsignedIntegerLittleEndian(io);
+							long len = DataUtil.Read32U.LE.read(io);
 							pos += 4;
 							String s = readString(set, len);
 							pos += len;
@@ -238,11 +231,11 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							prop = new OLEProperty.CodePageString(s);
 							break; }
 						case 0x000A: // Error
-							prop = new OLEProperty.Error(DataUtil.readUnsignedIntegerLittleEndian(io));
+							prop = new OLEProperty.Error(DataUtil.Read32U.LE.read(io));
 							pos += 4;
 							break;
 						case 0x000B: // boolean
-							prop = new OLEProperty.Bool(DataUtil.readUnsignedShortLittleEndian(io) == 0xFFFF);
+							prop = new OLEProperty.Bool(DataUtil.Read16U.LE.read(io) == 0xFFFF);
 							io.skip(2);
 							pos += 4;
 							break;
@@ -260,24 +253,24 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							pos += 4;
 							break;
 						case 0x0012: // unsigned short
-							prop = new OLEProperty.UnsignedShort(DataUtil.readUnsignedShortLittleEndian(io));
+							prop = new OLEProperty.UnsignedShort(DataUtil.Read16U.LE.read(io));
 							io.skip(2);
 							pos += 4;
 							break;
 						case 0x0013: case 0x0017:
-							prop = new OLEProperty.UnsignedInt(DataUtil.readUnsignedIntegerLittleEndian(io));
+							prop = new OLEProperty.UnsignedInt(DataUtil.Read32U.LE.read(io));
 							pos += 4;
 							break;
 						case 0x0014:
-							prop = new OLEProperty.Long(DataUtil.readLongLittleEndian(io));
+							prop = new OLEProperty.Long(DataUtil.Read64.LE.read(io));
 							pos += 8;
 							break;
 						case 0x0015:
-							prop = new OLEProperty.UnsignedLong(DataUtil.readLongLittleEndian(io));
+							prop = new OLEProperty.UnsignedLong(DataUtil.Read64.LE.read(io));
 							pos += 8;
 							break;
 						case 0x001F: { // unicode
-							long len = DataUtil.readUnsignedIntegerLittleEndian(io);
+							long len = DataUtil.Read32U.LE.read(io);
 							String s = readString(len*2, CodePages.CP_UNICODE);
 							pos += len;
 							int padding = (int)((len*2) % 4);
@@ -288,8 +281,8 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							prop = new OLEProperty.Str(s);
 							break; }
 						case 0x0040: { // filetime
-							long low = DataUtil.readUnsignedIntegerLittleEndian(io);
-							long high = DataUtil.readUnsignedIntegerLittleEndian(io);
+							long low = DataUtil.Read32U.LE.read(io);
+							long high = DataUtil.Read32U.LE.read(io);
 							long filetime = high << 32 | (low & 0xffffffffL);
 							long ms_since_16010101 = filetime / (1000 * 10);
 					        long ms_since_19700101 = ms_since_16010101 - OLEProperty.EPOCH_DIFF;
@@ -297,7 +290,7 @@ public class OLEPropertySetStream extends MicrosoftAbstractDataFormat {
 							pos += 8;
 							break; }
 						case 0x0041: // blob
-							prop = new OLEProperty.Bytes(pos+4, DataUtil.readUnsignedIntegerLittleEndian(io));
+							prop = new OLEProperty.Bytes(pos+4, DataUtil.Read32U.LE.read(io));
 							break;
 						case 0x0042: { // stream
 							prop = null; // TODO

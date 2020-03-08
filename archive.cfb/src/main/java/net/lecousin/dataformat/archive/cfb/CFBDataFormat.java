@@ -12,11 +12,10 @@ import net.lecousin.dataformat.core.DataFormatInfo;
 import net.lecousin.dataformat.core.util.OpenedDataCache;
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.CollectionListener;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.locale.FixedLocalizedString;
@@ -50,15 +49,15 @@ public class CFBDataFormat extends ArchiveDataFormat {
 		
 		@SuppressWarnings("resource")
 		@Override
-		protected AsyncWork<CFBFile,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
+		protected AsyncSupplier<CFBFile,Exception> open(Data data, Readable io, WorkProgress progress, long work) {
 			CFBFile cfb;
 			try { cfb = new CFBFile((IO.Readable.Seekable&IO.KnownSize)io, true /* TODO */, progress, work); }
 			catch (Exception e) {
-				return new AsyncWork<>(null, e);
+				return new AsyncSupplier<>(null, e);
 			}
-			ISynchronizationPoint<IOException> sp = cfb.getSynchOnReady();
-			AsyncWork<CFBFile,Exception> result = new AsyncWork<>();
-			sp.listenInline(new Runnable() {
+			IAsync<IOException> sp = cfb.getSynchOnReady();
+			AsyncSupplier<CFBFile,Exception> result = new AsyncSupplier<>();
+			sp.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (sp.hasError()) result.error(sp.getError());
@@ -82,10 +81,10 @@ public class CFBDataFormat extends ArchiveDataFormat {
 	};
 	
 	@Override
-	public AsyncWork<? extends DataFormatInfo,Exception> getInfo(Data data, byte priority) {
-		AsyncWork<ArchiveDataInfo,Exception> sp = new AsyncWork<>();
-		AsyncWork<CachedObject<CFBFile>,Exception> get = cache.open(data, this, priority/*, true*/, null, 0);
-		get.listenInline(new Runnable() {
+	public AsyncSupplier<? extends DataFormatInfo,Exception> getInfo(Data data, Priority priority) {
+		AsyncSupplier<ArchiveDataInfo,Exception> sp = new AsyncSupplier<>();
+		AsyncSupplier<CachedObject<CFBFile>,Exception> get = cache.open(data, this, priority/*, true*/, null, 0);
+		get.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (get.isCancelled()) return;
@@ -94,7 +93,7 @@ public class CFBDataFormat extends ArchiveDataFormat {
 					return;
 				}
 				CachedObject<CFBFile> cfb = get.getResult();
-				cfb.get().getSynchOnReady().listenInline(new Runnable() {
+				cfb.get().getSynchOnReady().onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (cfb.get().getSynchOnReady().hasError()) {
@@ -111,33 +110,28 @@ public class CFBDataFormat extends ArchiveDataFormat {
 				});
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				get.unblockCancel(event);
-			}
-		});
+		sp.onCancel(get::unblockCancel);
 		return sp;
 	}
 	
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
 		WorkProgress progress = new WorkProgressImpl(1000, "Reading CFB file");
-		AsyncWork<CachedObject<CFBFile>,Exception> get = cache.open(container, this, Task.PRIORITY_IMPORTANT/*, true*/, progress, 800);
-		new Task.Cpu.FromRunnable("Loading CFB", Task.PRIORITY_IMPORTANT, () -> {
+		AsyncSupplier<CachedObject<CFBFile>,Exception> get = cache.open(container, this, Priority.IMPORTANT/*, true*/, progress, 800);
+		Task.cpu("Loading CFB", Priority.IMPORTANT, t -> {
 			if (get.hasError()) {
 				listener.error(get.getError());
 				progress.error(get.getError());
 				LCCore.getApplication().getDefaultLogger().error("Error opening CFB file", get.getError());
-				return;
+				return null;
 			}
 			if (get.isCancelled()) {
 				listener.elementsReady(new ArrayList<>(0));
 				progress.done();
-				return;
+				return null;
 			}
 			CachedObject<CFBFile> cfb = get.getResult();
-			cfb.get().getSynchOnReady().listenInline(new Runnable() {
+			cfb.get().getSynchOnReady().onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (cfb.get().getSynchOnReady().hasError()) {
@@ -159,6 +153,7 @@ public class CFBDataFormat extends ArchiveDataFormat {
 					}
 				}
 			});
+			return null;
 		}).startOn(get, true);
 		return progress;
 	}

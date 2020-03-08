@@ -11,10 +11,11 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.DataFormatRegistry;
 import net.lecousin.dataformat.core.DataFormatSpecializationDetector;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
-import net.lecousin.framework.util.UnprotectedString;
+import net.lecousin.framework.text.CharArrayString;
 
 public class TextSpecializationDetectorWithFirstLines implements DataFormatSpecializationDetector {
 
@@ -46,7 +47,7 @@ public class TextSpecializationDetectorWithFirstLines implements DataFormatSpeci
 	
 	public static interface Plugin extends net.lecousin.framework.plugins.Plugin {
 		public DataFormat[] getDetectedFormats();
-		public DataFormat detect(Data data, ArrayList<UnprotectedString> lines, char[] allHeaderChars, int nbHeaderChars);
+		public DataFormat detect(Data data, ArrayList<CharArrayString> lines, char[] allHeaderChars, int nbHeaderChars);
 	}
 	
 	@Override
@@ -64,58 +65,55 @@ public class TextSpecializationDetectorWithFirstLines implements DataFormatSpeci
 	}
 	
 	@Override
-	public AsyncWork<DataFormat, NoException> detectSpecialization(Data data, byte priority, byte[] header, int headerSize) {
-		Task.Cpu<DataFormat, NoException> task = new Task.Cpu<DataFormat,NoException>("Detect text format", priority) {
-			@Override
-			public DataFormat run() {
-				// convert to characters
-				Charset cs = (Charset)data.getProperty(TextDataFormat.PROPERTY_CHARSET);
-				char[] chars = null;
-				int nb = 0;
-				if (cs != null) {
-					CharsetDecoder decoder = cs.newDecoder();
-					try {
-						CharBuffer cb = decoder.decode(ByteBuffer.wrap(header, 0, headerSize));
-						chars = cb.array();
-						nb = cb.limit();
-					} catch (Throwable t) {}
-				}
-				if (chars == null) {
-					chars = new char[headerSize];
-					nb = headerSize;
-					for (int i = 0; i < headerSize; ++i)
-						chars[i] = (char)(header[i]&0xFF);
-				}
-				// split lines
-				ArrayList<UnprotectedString> lines = new ArrayList<>();
-				int start = 0;
-				for (int i = 0; i < nb; ++i) {
-					if (chars[i] == '\r') {
-						if (i < nb-1 && chars[i+1] == '\n') {
-							lines.add(new UnprotectedString(chars, start, i-start, i-start));
-							start = i+2;
-							i++;
-							continue;
-						}
-						lines.add(new UnprotectedString(chars, start, i-start, i-start));
-						start = i+1;
+	public AsyncSupplier<DataFormat, NoException> detectSpecialization(Data data, Priority priority, byte[] header, int headerSize) {
+		Task<DataFormat, NoException> task = Task.cpu("Detect text format", priority, taskContext -> {
+			// convert to characters
+			Charset cs = (Charset)data.getProperty(TextDataFormat.PROPERTY_CHARSET);
+			char[] chars = null;
+			int nb = 0;
+			if (cs != null) {
+				CharsetDecoder decoder = cs.newDecoder();
+				try {
+					CharBuffer cb = decoder.decode(ByteBuffer.wrap(header, 0, headerSize));
+					chars = cb.array();
+					nb = cb.limit();
+				} catch (Throwable t) {}
+			}
+			if (chars == null) {
+				chars = new char[headerSize];
+				nb = headerSize;
+				for (int i = 0; i < headerSize; ++i)
+					chars[i] = (char)(header[i]&0xFF);
+			}
+			// split lines
+			ArrayList<CharArrayString> lines = new ArrayList<>();
+			int start = 0;
+			for (int i = 0; i < nb; ++i) {
+				if (chars[i] == '\r') {
+					if (i < nb-1 && chars[i+1] == '\n') {
+						lines.add(new CharArrayString(chars, start, i-start, i-start));
+						start = i+2;
+						i++;
 						continue;
 					}
-					if (chars[i] == '\n') {
-						lines.add(new UnprotectedString(chars, start, i-start, i-start));
-						start = i+1;
-					}
+					lines.add(new CharArrayString(chars, start, i-start, i-start));
+					start = i+1;
+					continue;
 				}
-				if (lines.isEmpty())
-					return null;
-				for (Plugin pi : ExtensionPoint.plugins) {
-					DataFormat f = pi.detect(data, lines, chars, nb);
-					if (f != null)
-						return f;
+				if (chars[i] == '\n') {
+					lines.add(new CharArrayString(chars, start, i-start, i-start));
+					start = i+1;
 				}
-				return null;
 			}
-		};
+			if (lines.isEmpty())
+				return null;
+			for (Plugin pi : ExtensionPoint.plugins) {
+				DataFormat f = pi.detect(data, lines, chars, nb);
+				if (f != null)
+					return f;
+			}
+			return null;
+		});
 		task.start();
 		return task.getOutput();
 	}

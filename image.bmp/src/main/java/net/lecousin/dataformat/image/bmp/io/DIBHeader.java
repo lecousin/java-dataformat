@@ -2,7 +2,7 @@ package net.lecousin.dataformat.image.bmp.io;
 
 import java.awt.image.IndexColorModel;
 
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 
 public class DIBHeader {
 
@@ -55,6 +55,6 @@ public class DIBHeader {
 
 	public boolean bottomUp = true;
 	
-	public AsyncWork<IndexColorModel,Exception> palette = null;
+	public AsyncSupplier<IndexColorModel,Exception> palette = null;
 	
 }

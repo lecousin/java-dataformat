@@ -1,18 +1,17 @@
 package net.lecousin.dataformat.core.file;
 
 import java.io.File;
+import java.io.IOException;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.hierarchy.IDirectoryData;
 import net.lecousin.framework.application.LCCore;
-import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.event.Listener;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.memory.SimpleCache;
-import net.lecousin.framework.util.Provider.FromValue;
 
 public class FileData extends Data {
 	
@@ -24,14 +23,11 @@ public class FileData extends Data {
 
 	private static SimpleCache<File,FileData> cache;
 	static {
-		cache = new SimpleCache<>("FileData", new FromValue<File, FileData>() {
-			@Override
-			public FileData provide(File file) {
-				boolean dir = file.isDirectory();
-				if (dir)
-					return new DirectoryData(file);
-				return new FileData(file, false);
-			}
+		cache = new SimpleCache<>("FileData", file -> {
+			boolean dir = file.isDirectory();
+			if (dir)
+				return new DirectoryData(file);
+			return new FileData(file, false);
 		});
 		LCCore.get().toClose(cache);
 	}
@@ -87,11 +83,11 @@ public class FileData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected AsyncWork<IO.Readable,? extends Exception> openIOReadOnly(byte priority) {
+	protected AsyncSupplier<IO.Readable,IOException> openIOReadOnly(Priority priority) {
 		if (file.isDirectory()) return null;
 		FileIO.ReadOnly io = new FileIO.ReadOnly(file, priority);
-		AsyncWork<IO.Readable, Exception> sp = new AsyncWork<>();
-		io.canStart().listenInline(new Runnable() {
+		AsyncSupplier<IO.Readable, IOException> sp = new AsyncSupplier<>();
+		io.canStart().onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (io.canStart().isCancelled())
@@ -104,12 +100,7 @@ public class FileData extends Data {
 				}
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				io.canStart().cancel(event);
-			}
-		});
+		sp.onCancel(event -> io.canStart().cancel(event));
 		return sp;
 	}
 	
@@ -120,10 +111,10 @@ public class FileData extends Data {
 	
 	@SuppressWarnings("resource")
 	@Override
-	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncWork<T, ? extends Exception> openIOReadWrite(byte priority) {
+	protected <T extends IO.Readable.Seekable & IO.Writable.Seekable> AsyncSupplier<T, IOException> openIOReadWrite(Priority priority) {
 		FileIO.ReadWrite io = new FileIO.ReadWrite(file, priority);
-		AsyncWork<T, Exception> sp = new AsyncWork<>();
-		io.canStart().listenInline(new Runnable() {
+		AsyncSupplier<T, IOException> sp = new AsyncSupplier<>();
+		io.canStart().onDone(new Runnable() {
 			@SuppressWarnings("unchecked")
 			@Override
 			public void run() {
@@ -137,12 +128,7 @@ public class FileData extends Data {
 				}
 			}
 		});
-		sp.onCancel(new Listener<CancelException>() {
-			@Override
-			public void fire(CancelException event) {
-				io.canStart().cancel(event);
-			}
-		});
+		sp.onCancel(event -> io.canStart().cancel(event));
 		return sp;
 	}
 	

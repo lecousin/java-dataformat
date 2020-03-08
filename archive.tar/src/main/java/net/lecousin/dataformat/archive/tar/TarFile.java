@@ -5,11 +5,13 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.async.IAsync;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.progress.WorkProgress;
@@ -24,7 +26,7 @@ public class TarFile implements Closeable {
 	
 	private IO.Readable.Seekable input;
 	private ArrayList<TarEntry> entries = new ArrayList<TarEntry>();
-	private SynchronizationPoint<IOException> ready = new SynchronizationPoint<IOException>();
+	private Async<IOException> ready = new Async<IOException>();
 	
 	@Override
 	public void close() throws IOException {
@@ -33,7 +35,7 @@ public class TarFile implements Closeable {
 		input = null;
 	}
 	
-	public ISynchronizationPoint<IOException> getSynchOnReady() {
+	public IAsync<IOException> getSynchOnReady() {
 		return ready;
 	}
 	
@@ -48,8 +50,8 @@ public class TarFile implements Closeable {
 	}
 	private void readEntry(byte[] buffer, ByteBuffer bb, long pos, WorkProgress progress, long work) {
 		bb.clear();
-		AsyncWork<Integer,IOException> readHeader = input.readFullyAsync(pos, bb);
-		readHeader.listenInline(new AsyncWorkListener<Integer, IOException>() {
+		AsyncSupplier<Integer,IOException> readHeader = input.readFullyAsync(pos, bb);
+		readHeader.listen(new Listener<Integer, IOException>() {
 			@Override
 			public void ready(Integer nbRead) {
 				if (nbRead.intValue() <= 0) {
@@ -62,7 +64,7 @@ public class TarFile implements Closeable {
 					ready.error(new IOException("TAR file "+input.getSourceDescription()+" is truncated: only "+nbRead.intValue()+" bytes read at "+pos+", expecting is at least 512 for a file header in a TAR file"));
 					return;
 				}
-				new ReadEntry(buffer, bb, pos, progress, work).start();
+				Task.cpu("Read TAR file entry at "+pos, Priority.NORMAL, new ReadEntry(buffer, bb, pos, progress, work)).start();
 			}
 			@Override
 			public void error(IOException error) {
@@ -74,9 +76,9 @@ public class TarFile implements Closeable {
 			}
 		});
 	}
-	private class ReadEntry extends Task.Cpu<Void,NoException> {
+	
+	private class ReadEntry implements Executable<Void,NoException> {
 		public ReadEntry(byte[] buffer, ByteBuffer bb, long pos, WorkProgress progress, long work) {
-			super("Read TAR file entry at "+pos, Task.PRIORITY_NORMAL);
 			this.buffer = buffer;
 			this.bb = bb;
 			this.pos = pos;
@@ -89,7 +91,7 @@ public class TarFile implements Closeable {
 		private WorkProgress progress;
 		private long work;
 		@Override
-		public Void run() {
+		public Void execute(Task<Void, NoException> taskContext) {
 			if (progress != null) progress.progress(work/10);
 			work -= work/10;
 			String name = readString(buffer, 0, 100);

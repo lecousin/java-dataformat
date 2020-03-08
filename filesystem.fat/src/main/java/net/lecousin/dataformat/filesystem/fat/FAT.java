@@ -8,21 +8,20 @@ import java.util.List;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.AsyncCollection;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.ISynchronizationPoint;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.async.IAsync;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.log.Logger;
 
 public abstract class FAT {
 	
-	public static AsyncWork<FAT, IOException> open(IO.Readable.Seekable io) {
+	public static AsyncSupplier<FAT, IOException> open(IO.Readable.Seekable io) {
 		byte[] sector = new byte[512];
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(0, ByteBuffer.wrap(sector));
-		AsyncWork<FAT, IOException> result = new AsyncWork<>();
-		read.listenAsync(new Task.Cpu.FromRunnable("Opening FAT File system", io.getPriority(), () -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(0, ByteBuffer.wrap(sector));
+		AsyncSupplier<FAT, IOException> result = new AsyncSupplier<>();
+		read.thenStart("Opening FAT File system", io.getPriority(), () -> {
 			if (read.getResult().intValue() == 512) {
 				if (sector[0x36] == 'F' && sector[0x37] == 'A' && sector[0x38] == 'T' && sector[0x39] == '1') {
 					if (sector[0x3A] == '2') {
@@ -55,15 +54,15 @@ public abstract class FAT {
 				}
 			}
 			result.error(new IOException("Not a FAT file system"));
-		}), result);
+		}, result);
 		return result;
 	}
 	
 	protected FAT(IO.Readable.Seekable io) {
 		this.io = io;
 		byte[] sector = new byte[512];
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(0, ByteBuffer.wrap(sector));
-		read.listenAsync(new Task.Cpu.FromRunnable("Opening FAT File system", io.getPriority(), () -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(0, ByteBuffer.wrap(sector));
+		read.thenStart("Opening FAT File system", io.getPriority(), () -> {
 			if (read.getResult().intValue() == 512) {
 				if (sector[0x36] == 'F' && sector[0x37] == 'A' && sector[0x38] == 'T' && sector[0x39] == '1') {
 					if (sector[0x3A] == '2') {
@@ -108,7 +107,7 @@ public abstract class FAT {
 				}
 			}
 			loaded.error(new IOException("Not a FAT file system"));
-		}), loaded);
+		}, loaded);
 	}
 	
 	protected FAT(IO.Readable.Seekable io, byte[] firstSector) throws IOException {
@@ -123,7 +122,7 @@ public abstract class FAT {
 	}
 	
 	protected IO.Readable.Seekable io;
-	protected SynchronizationPoint<IOException> loaded = new SynchronizationPoint<>();
+	protected Async<IOException> loaded = new Async<>();
 	protected Logger logger = LCCore.getApplication().getLoggerFactory().getLogger(FAT.class);
 	
 	protected byte fatEntryBits;
@@ -141,15 +140,15 @@ public abstract class FAT {
 	
 	protected void loadFirstSector(byte[] sector) throws IOException {
 		formatterSystem = new String(sector, 0x03, 8).trim();
-		bytesPerSector = DataUtil.readUnsignedShortLittleEndian(sector, 0x0B);
+		bytesPerSector = DataUtil.Read16U.LE.read(sector, 0x0B);
 		sectorsPerCluster = (short)(sector[0x0D] & 0xFF);
-		reservedSectors = DataUtil.readUnsignedShortLittleEndian(sector, 0x0E);
+		reservedSectors = DataUtil.Read16U.LE.read(sector, 0x0E);
 		nbFat = (short)(sector[0x10] & 0xFF);
-		totalSectors = DataUtil.readUnsignedShortLittleEndian(sector, 0x13);
-		if (totalSectors == 0) totalSectors = DataUtil.readUnsignedIntegerLittleEndian(sector, 0x20);
+		totalSectors = DataUtil.Read16U.LE.read(sector, 0x13);
+		if (totalSectors == 0) totalSectors = DataUtil.Read32U.LE.read(sector, 0x20);
 	}
 	
-	public ISynchronizationPoint<IOException> getLoadedSynch() {
+	public IAsync<IOException> getLoadedSynch() {
 		return loaded;
 	}
 	
@@ -263,10 +262,10 @@ public abstract class FAT {
 		String ext = new String(sector, offset + 8, 3, StandardCharsets.US_ASCII).trim();
 		if (ext.length() > 0) currentState.entry.shortName += "." + ext;
 		currentState.entry.attributes = attr;
-		currentState.entry.cluster = DataUtil.readUnsignedShortLittleEndian(sector, offset + 0x1A);
+		currentState.entry.cluster = DataUtil.Read16U.LE.read(sector, offset + 0x1A);
 		if (fatEntryBits == 32)
-			currentState.entry.cluster |= ((long)DataUtil.readUnsignedShortLittleEndian(sector, offset + 0x14)) << 16;
-		currentState.entry.size = DataUtil.readUnsignedIntegerLittleEndian(sector, offset + 0x1C);
+			currentState.entry.cluster |= ((long)DataUtil.Read16U.LE.read(sector, offset + 0x14)) << 16;
+		currentState.entry.size = DataUtil.Read32U.LE.read(sector, offset + 0x1C);
 		// TODO dates...
 		
 		if (currentState.lastLFNSequence == 1) {
@@ -286,8 +285,8 @@ public abstract class FAT {
 
 	private void readDirectory(long cluster, FatEntryState state, byte[] buffer, AsyncCollection<FatEntry> listener) {
 		long offset = dataRegionAddress + (cluster - 2) * sectorsPerCluster * bytesPerSector;
-		AsyncWork<Integer, IOException> read = io.readFullyAsync(offset, ByteBuffer.wrap(buffer));
-		read.listenAsync(new Task.Cpu.FromRunnable("Read FAT directory", io.getPriority(), () -> {
+		AsyncSupplier<Integer, IOException> read = io.readFullyAsync(offset, ByteBuffer.wrap(buffer));
+		read.thenStart("Read FAT directory", io.getPriority(), () -> {
 			if (read.hasError()) {
 				listener.error(read.getError());
 				return;
@@ -307,7 +306,7 @@ public abstract class FAT {
 			}
 			if (!entries.isEmpty())
 				listener.newElements(entries);
-			getNextCluster(cluster, buffer).listenInline(
+			getNextCluster(cluster, buffer).onDone(
 				(res) -> {
 					if (res == -1)
 						listener.done();
@@ -317,8 +316,8 @@ public abstract class FAT {
 				(error) -> { listener.error(error); },
 				(cancel) -> { listener.error(cancel); }
 			);
-		}), true);
+		}, true);
 	}
 	
-	protected abstract AsyncWork<Long, IOException> getNextCluster(long cluster, byte[] buffer);
+	protected abstract AsyncSupplier<Long, IOException> getNextCluster(long cluster, byte[] buffer);
 }

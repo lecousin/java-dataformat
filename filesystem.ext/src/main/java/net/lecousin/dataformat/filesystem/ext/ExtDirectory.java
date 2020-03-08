@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.lecousin.dataformat.filesystem.ext.ExtFS.INode;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.io.util.DataUtil;
 
 public class ExtDirectory extends ExtFSEntry {
@@ -19,12 +19,12 @@ public class ExtDirectory extends ExtFSEntry {
 		super(parent, name, inode);
 	}
 	
-	protected AsyncWork<List<ExtFSEntry>, IOException> entries = null;
+	protected AsyncSupplier<List<ExtFSEntry>, IOException> entries = null;
 	
-	public AsyncWork<List<ExtFSEntry>, IOException> getEntries() {
+	public AsyncSupplier<List<ExtFSEntry>, IOException> getEntries() {
 		if (entries != null)
 			return entries;
-		entries = new AsyncWork<>();
+		entries = new AsyncSupplier<>();
 		readContent();
 		return entries;
 	}
@@ -36,11 +36,11 @@ public class ExtDirectory extends ExtFSEntry {
 		byte[] buf = new byte[263];
 		ExtFS fs = getFS();
 		ArrayList<ExtFSEntry> list = new ArrayList<>();
-		content.loadINode.listenInline(
+		content.loadINode.onDone(
 			(inode) -> { readContent(content, pos, buf, fs, inode, list); },
 			entries
 		);
-		entries.listenInline(() -> {
+		entries.onDone(() -> {
 			try { content.close(); }
 			catch (Exception e) {}
 		});
@@ -51,10 +51,10 @@ public class ExtDirectory extends ExtFSEntry {
 			entries.unblockSuccess(list);
 			return;
 		}
-		content.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 8)).listenInline(
+		content.readFullyAsync(pos, ByteBuffer.wrap(buf, 0, 8)).onDone(
 			() -> {
-				long inodeNum = DataUtil.readUnsignedIntegerLittleEndian(buf, 0);
-				int recSize = DataUtil.readUnsignedShortLittleEndian(buf, 4);
+				long inodeNum = DataUtil.Read32U.LE.read(buf, 0);
+				int recSize = DataUtil.Read16U.LE.read(buf, 4);
 				if (recSize == 0) {
 					entries.unblockSuccess(list);
 					return;
@@ -66,7 +66,7 @@ public class ExtDirectory extends ExtFSEntry {
 						filetype = buf[7] & 0xFF;
 					else
 						filetype = -1;
-					content.readFullyAsync(pos+8, ByteBuffer.wrap(buf, 0, nameLen)).listenInline(
+					content.readFullyAsync(pos+8, ByteBuffer.wrap(buf, 0, nameLen)).onDone(
 						() -> {
 							String name = new String(buf, 0, nameLen);
 							if (nameLen > 0 && !name.equals(".") && !name.equals("..")) { 
@@ -80,7 +80,7 @@ public class ExtDirectory extends ExtFSEntry {
 										// see http://www.nongnu.org/ext2-doc/ext2.html#I-MODE
 									}
 								} else {
-									fs.readINode(inodeNum).listenInline(
+									fs.readINode(inodeNum).onDone(
 										(childInode) -> {
 											if (childInode.isDirectory()) {
 												list.add(new ExtDirectory(ExtDirectory.this, name, childInode));

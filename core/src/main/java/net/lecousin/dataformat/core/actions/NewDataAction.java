@@ -4,7 +4,8 @@ import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
 import net.lecousin.dataformat.core.actions.NewDataAction.NewDataParam;
 import net.lecousin.dataformat.core.formats.EmptyDataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
@@ -45,18 +46,18 @@ public class NewDataAction implements DataAction.SingleData<NewDataParam, Data, 
 
 	@SuppressWarnings("unchecked")
 	@Override
-	public AsyncWork<Data, Exception> execute(Data data, NewDataParam parameter, byte priority, WorkProgress progress, long work) {
-		AsyncWork<Data, Exception> result = new AsyncWork<>();
+	public AsyncSupplier<Data, Exception> execute(Data data, NewDataParam parameter, Priority priority, WorkProgress progress, long work) {
+		AsyncSupplier<Data, Exception> result = new AsyncSupplier<>();
 		long stepCreate = work / 3;
 		long stepInit = work - stepCreate;
 		createAction.execute(data, parameter.createParams, priority, progress, stepCreate)
-		.listenInline((res) -> {
+		.onDone((res) -> {
 			Pair<Data, IO.Writable> p = (Pair<Data, IO.Writable>)res;
 			Data newData = p.getValue1();
 			@SuppressWarnings("resource")
 			IO.Writable io = p.getValue2();
 			((InitNewDataAction)parameter.format.getInitNewDataAction()).execute(newData, io, parameter.initParams, progress, stepInit)
-			.listenInline(() -> {
+			.onDone(() -> {
 				io.closeAsync();
 				result.unblockSuccess(newData);
 				progress.done();

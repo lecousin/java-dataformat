@@ -7,9 +7,9 @@ import java.nio.charset.StandardCharsets;
 
 import net.lecousin.dataformat.archive.rar.RarArchive.RARFile;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
 import net.lecousin.framework.io.IO.Seekable.SeekType;
@@ -29,14 +29,14 @@ class Rar5Loader extends RarLoader {
 	
 	@Override
 	protected void start() {
-		SynchronizationPoint<IOException> canStart = new SynchronizationPoint<>();		
+		Async<IOException> canStart = new Async<>();		
 		if (!(rar.io instanceof IO.Readable.Buffered)) {
 			// RAR 5 format uses variable length fields, so we need to have buffering
-			AsyncWorkListener<Long, IOException> listener = new AsyncWorkListener<Long, IOException>() {
+			Listener<Long, IOException> listener = new Listener<Long, IOException>() {
 				@Override
 				public void ready(Long result) {
 					rar.io = new BufferedIO(rar.io, result.longValue(), 4096, 4096, false);
-					((BufferedIO)rar.io).canStartReading().listenInline(canStart);
+					((BufferedIO)rar.io).canStartReading().onDone(canStart);
 				}
 				@Override
 				public void cancelled(CancelException event) {
@@ -48,27 +48,24 @@ class Rar5Loader extends RarLoader {
 				}
 			};
 			if (rar.io instanceof IO.KnownSize)
-				((IO.KnownSize)rar.io).getSizeAsync().listenInline(listener);
+				((IO.KnownSize)rar.io).getSizeAsync().listen(listener);
 			else
-				rar.io.seekAsync(SeekType.FROM_END, 0).listenInline(listener);
+				rar.io.seekAsync(SeekType.FROM_END, 0).listen(listener);
 		} else
-			((IO.Readable.Buffered)rar.io).canStartReading().listenInline(canStart);
-		canStart.listenAsync(new Task.Cpu<Void,NoException>("Start loading RAR 5 archive", rar.io.getPriority()) {
-			@Override
-			public Void run() {
-				if (canStart.isCancelled()) {
-					rar.contentLoaded.cancel(canStart.getCancelEvent());
-					return null;
-				}
-				if (canStart.hasError()) {
-					RarArchive.getLogger().error("Error initializing RAR5 loader", canStart.getError());
-					rar.contentLoaded.error(canStart.getError());
-					return null;
-				}
-				byte[] b = new byte[16384];
-				readBlock((IO.Readable.Seekable&IO.Readable.Buffered)rar.io, 8, b, ByteBuffer.wrap(b), progress, work);
+			((IO.Readable.Buffered)rar.io).canStartReading().onDone(canStart);
+		canStart.thenStart("Start loading RAR 5 archive", rar.io.getPriority(), (Task<Void, NoException> t) -> {
+			if (canStart.isCancelled()) {
+				rar.contentLoaded.cancel(canStart.getCancelEvent());
 				return null;
 			}
+			if (canStart.hasError()) {
+				RarArchive.getLogger().error("Error initializing RAR5 loader", canStart.getError());
+				rar.contentLoaded.error(canStart.getError());
+				return null;
+			}
+			byte[] b = new byte[16384];
+			readBlock((IO.Readable.Seekable&IO.Readable.Buffered)rar.io, 8, b, ByteBuffer.wrap(b), progress, work);
+			return null;
 		}, true);
 	}
 	

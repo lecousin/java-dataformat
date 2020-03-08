@@ -10,28 +10,29 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.zip.CRC32;
 import java.util.zip.Deflater;
 
 import net.lecousin.framework.application.LCCore;
 import net.lecousin.framework.collections.LinkedArrayList;
 import net.lecousin.framework.collections.TurnArray;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.CancelException;
-import net.lecousin.framework.concurrent.Task;
-import net.lecousin.framework.concurrent.TaskManager;
-import net.lecousin.framework.concurrent.Threading;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
-import net.lecousin.framework.concurrent.synch.AsyncWork.AsyncWorkListener;
-import net.lecousin.framework.concurrent.synch.SynchronizationPoint;
+import net.lecousin.framework.concurrent.Executable;
+import net.lecousin.framework.concurrent.async.Async;
+import net.lecousin.framework.concurrent.async.AsyncSupplier.Listener;
+import net.lecousin.framework.concurrent.threads.Task;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
+import net.lecousin.framework.concurrent.threads.TaskManager;
+import net.lecousin.framework.concurrent.threads.Threading;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.FileIO;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.io.IO.Readable;
 import net.lecousin.framework.io.IO.Seekable.SeekType;
 import net.lecousin.framework.io.util.DataUtil;
 import net.lecousin.framework.log.Logger;
 import net.lecousin.framework.util.Pair;
-import net.lecousin.framework.util.Provider;
 
 public class ZipCreator {
 	
@@ -62,7 +63,7 @@ public class ZipCreator {
 		initMemory(maxMemory);
 	}
 	
-	public ZipCreator(File file, byte priority, int maxMemory) throws IOException {
+	public ZipCreator(File file, Priority priority, int maxMemory) throws IOException {
 		if (file.exists()) throw new IOException("File already exists: " + file.getAbsolutePath());
 		if (!file.createNewFile()) throw new IOException("Unable to create file " + file.getAbsolutePath());
 		this.outputFile = file;
@@ -70,7 +71,7 @@ public class ZipCreator {
 		initMemory(maxMemory);
 	}
 	
-	public SynchronizationPoint<Exception> getSynch() {
+	public Async<Exception> getSynch() {
 		return end;
 	}
 	public List<Pair<String,Exception>> getFilesInError() {
@@ -86,7 +87,7 @@ public class ZipCreator {
 	private int tmpFileCounter = 0;
 	private ArrayList<ToZip> errors = new ArrayList<>(2);
 	private Exception fatalError = null;
-	private SynchronizationPoint<Exception> end = new SynchronizationPoint<>();
+	private Async<Exception> end = new Async<>();
 	
 	private void fatalError(Exception e) {
 		if (logger.error()) logger.error("Fatal error", e);
@@ -199,7 +200,7 @@ public class ZipCreator {
 	/* List of files to zip */
 	
 	private static class ToZip {
-		public Provider<IO.Readable> opener;
+		public Supplier<IO.Readable> opener;
 		public TaskManager manager;
 		public IO.Readable input;
 		public long inputSize; // TODO get it from caller if possible
@@ -217,13 +218,8 @@ public class ZipCreator {
 	
 	public void add(File file, String pathInZip) {
 		ToZip t = new ToZip();
-		t.opener = new Provider<IO.Readable>() {
-			@Override
-			public Readable provide() {
-				return new FileIO.ReadOnly(file, output.getPriority());
-			}
-		};
-		t.manager = Threading.getDrivesTaskManager().getTaskManager(file);
+		t.opener = () -> new FileIO.ReadOnly(file, output.getPriority());
+		t.manager = Threading.getDrivesManager().getTaskManager(file);
 		t.pathInZip = pathInZip;
 		add(t);
 	}
@@ -304,9 +300,9 @@ public class ZipCreator {
 		private byte[] buffer;
 		public void start() {
 			if (file.input == null) {
-				file.input = file.opener.provide();
-				AsyncWork<Long,IOException> size = ((IO.KnownSize)file.input).getSizeAsync();
-				size.listenInline(new Runnable() {
+				file.input = file.opener.get();
+				AsyncSupplier<Long,IOException> size = ((IO.KnownSize)file.input).getSizeAsync();
+				size.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (fatalError != null) {
@@ -328,57 +324,54 @@ public class ZipCreator {
 				return;
 			}
 			if (logger.debug()) logger.debug("Reading from " + file.pathInZip);
-			AsyncWork<Integer,IOException> read = file.input.readFullyAsync(ByteBuffer.wrap(buffer));
-			read.listenAsync(new Task.Cpu<Void,NoException>("Get read buffer", Task.PRIORITY_IMPORTANT) {
-				@Override
-				public Void run() {
-					if (fatalError != null) {
-						file.input.closeAsync();
-						return null;
-					}
-					if (!read.isSuccessful()) {
-						if (logger.debug()) logger.debug("Error reading from " + file.pathInZip, read.getError());
-						freeBuffer(buffer);
-						error(file, read.getError());
-						try { file.input.close(); } catch (Throwable t) {}
-						nextFile();
-						return null;
-					}
-					if (file.error != null) {
-						freeBuffer(buffer);
-						try { file.input.close(); } catch (Throwable t) {}
-						nextFile();
-						return null;
-					}
-					int nb = read.getResult().intValue();
-					if (logger.debug()) logger.debug(nb + " bytes read from " + file.pathInZip);
-					if (file.compressor == null)
-						file.compressor = new CompressFile(file);
-					if (nb <= 0) {
-						freeBuffer(buffer);
-						file.compressor.newBufferToCompress(null, 0, true);
-						try { file.input.close(); } catch (Throwable t) {}
-						if (logger.debug()) logger.debug("End of read for " + file.pathInZip);
-						nextFile();
-						return null;
-					}
-					// data to compress
-					file.compressor.newBufferToCompress(buffer, nb, nb < buffer.length);
-					if (nb == buffer.length) {
-						// still data to read
-						buffer = getBuffer(true);
-						if (buffer == null) { // no available buffer, we will get one later
-							if (logger.debug()) logger.debug("Wait for available buffer to read from " + file.pathInZip);
-							return null;
-						}
-						ReadFile.this.start();
-					} else {
-						try { file.input.close(); } catch (Throwable t) {}
-						if (logger.debug()) logger.debug("End of read for " + file.pathInZip);
-						nextFile();
-					}
+			AsyncSupplier<Integer,IOException> read = file.input.readFullyAsync(ByteBuffer.wrap(buffer));
+			read.thenStart("Get read buffer", Task.Priority.IMPORTANT, (Task<Void, NoException> task) -> {
+				if (fatalError != null) {
+					file.input.closeAsync();
 					return null;
 				}
+				if (!read.isSuccessful()) {
+					if (logger.debug()) logger.debug("Error reading from " + file.pathInZip, read.getError());
+					freeBuffer(buffer);
+					error(file, read.getError());
+					try { file.input.close(); } catch (Throwable t) {}
+					nextFile();
+					return null;
+				}
+				if (file.error != null) {
+					freeBuffer(buffer);
+					try { file.input.close(); } catch (Throwable t) {}
+					nextFile();
+					return null;
+				}
+				int nb = read.getResult().intValue();
+				if (logger.debug()) logger.debug(nb + " bytes read from " + file.pathInZip);
+				if (file.compressor == null)
+					file.compressor = new CompressFile(file);
+				if (nb <= 0) {
+					freeBuffer(buffer);
+					file.compressor.newBufferToCompress(null, 0, true);
+					try { file.input.close(); } catch (Throwable t) {}
+					if (logger.debug()) logger.debug("End of read for " + file.pathInZip);
+					nextFile();
+					return null;
+				}
+				// data to compress
+				file.compressor.newBufferToCompress(buffer, nb, nb < buffer.length);
+				if (nb == buffer.length) {
+					// still data to read
+					buffer = getBuffer(true);
+					if (buffer == null) { // no available buffer, we will get one later
+						if (logger.debug()) logger.debug("Wait for available buffer to read from " + file.pathInZip);
+						return null;
+					}
+					ReadFile.this.start();
+				} else {
+					try { file.input.close(); } catch (Throwable t) {}
+					if (logger.debug()) logger.debug("End of read for " + file.pathInZip);
+					nextFile();
+				}
+				return null;
 			}, true);
 		}
 		private void nextFile() {
@@ -439,7 +432,7 @@ public class ZipCreator {
 		private ToZip file;
 		private Deflater deflater;
 		private TurnArray<Pair<byte[],Integer>> queue = new TurnArray<>(5);
-		private Compressing compressing = null;
+		private Task<Void, NoException> compressing = null;
 		private byte[] outputBuffer = null;
 		private int outputBufferPos = 0;
 		private boolean endOfInput = false;
@@ -456,7 +449,7 @@ public class ZipCreator {
 					queue.addLast(new Pair<>(input, Integer.valueOf(len)));
 				if (compressing != null)
 					return;
-				compressing = new Compressing();
+				compressing = compressing(null);
 			}
 			if (input != null && outputBuffer == null) {
 				synchronized (availableBuffers) {
@@ -472,13 +465,17 @@ public class ZipCreator {
 				compressing.start();
 		}
 		
-		private class Compressing extends Task.Cpu<Void, NoException> {
-			private Compressing() {
-				super("Compressing file", output.getPriority());
+		private Task<Void, NoException> compressing(byte[] inputSet) {
+			return Task.cpu("Compressing file", output.getPriority(), new Compressing(inputSet));
+		}
+		
+		private class Compressing implements Executable<Void, NoException> {
+			private Compressing(byte[] inputSet) {
+				this.inputSet = inputSet;
 			}
-			private byte[] inputSet = null;
+			private byte[] inputSet;
 			@Override
-			public Void run() {
+			public Void execute(Task<Void, NoException> taskContext) {
 				if (logger.debug()) logger.debug("Compressing " + file.pathInZip);
 				do {
 					if (fatalError != null) {
@@ -531,8 +528,7 @@ public class ZipCreator {
 								if (outputBuffer == null) {
 									compressorsWaiting.addLast(CompressFile.this);
 									if (logger.debug()) logger.debug("No available buffer to continue compressing " + file.pathInZip);
-									compressing = new Compressing();
-									compressing.inputSet = inputSet;
+									compressing = compressing(inputSet);
 									return null;
 								}
 							}
@@ -562,8 +558,7 @@ public class ZipCreator {
 							if (outputBuffer == null) {
 								if (logger.debug()) logger.debug("No available buffer to finish compressing " + file.pathInZip);
 								compressorsWaiting.addLast(CompressFile.this);
-								compressing = new Compressing();
-								compressing.inputSet = inputSet;
+								compressing = compressing(inputSet);
 								return;
 							}
 						}
@@ -613,7 +608,7 @@ public class ZipCreator {
 						else {
 							writingToTmp = true;
 							listener.writingBuffer = buffer;
-							tmpIO.writeAsync(ByteBuffer.wrap(buffer, 0, nb)).listenInline(listener);
+							tmpIO.writeAsync(ByteBuffer.wrap(buffer, 0, nb)).listen(listener);
 						}
 					}
 				}
@@ -633,21 +628,19 @@ public class ZipCreator {
 			}
 			compressedBuffers.add(ByteBuffer.wrap(buffer, 0, nb));
 			if ((compressedBuffers.size() + 1) * bufferSize > (4*1024*1024))
-				new CreateTempFile();
+				Task.file(outputFile, "Create temporary file for big file to be compressed", output.getPriority(), new CreateTempFile()).start();
 		}
 		// temporary file
 		private File tmpFile = null;
 		private FileIO.ReadWrite tmpIO = null;
 		private WriteTmpListener listener = null;
 		private boolean writingToTmp = false;
-		private class CreateTempFile extends Task.OnFile<Void, NoException> {
+		private class CreateTempFile implements Executable<Void, NoException> {
 			public CreateTempFile() {
-				super(outputFile, "Create temporary file for big file to be compressed", output.getPriority());
 				writingToTmp = true;
-				start();
 			}
 			@Override
-			public Void run() {
+			public Void execute(Task<Void, NoException> taskContext) {
 				if (logger.debug()) logger.debug("Creating temporary file for " + file.pathInZip);
 				if (file.error != null) return null;
 				if (fatalError != null) return null;
@@ -670,11 +663,11 @@ public class ZipCreator {
 				synchronized (compressedBuffers) {
 					buffer = compressedBuffers.removeFirst();
 				}
-				tmpIO.writeAsync(buffer).listenInline(listener = new WriteTmpListener(buffer.array()));
+				tmpIO.writeAsync(buffer).listen(listener = new WriteTmpListener(buffer.array()));
 				return null;
 			}
 		}
-		private class WriteTmpListener implements AsyncWorkListener<Integer,IOException> {
+		private class WriteTmpListener implements Listener<Integer,IOException> {
 			public WriteTmpListener(byte[] buffer) {
 				writingBuffer = buffer;
 			}
@@ -710,7 +703,7 @@ public class ZipCreator {
 					buffer = compressedBuffers.removeFirst();
 					writingBuffer = buffer.array();
 				}
-				tmpIO.writeAsync(buffer).listenInline(this);
+				tmpIO.writeAsync(buffer).listen(this);
 			}
 			@Override
 			public void error(IOException error) {
@@ -782,22 +775,22 @@ public class ZipCreator {
 			// TODO bit 3 to 0 indicates that data descriptor is not set to 0, change it when using ZIP64
 			localEntryStart[6] = 4;
 			// TODO set date and time
-			DataUtil.writeUnsignedIntegerLittleEndian(localEntryStart, 14, file.crc32);
-			DataUtil.writeUnsignedIntegerLittleEndian(localEntryStart, 18, file.compressedSize);
-			DataUtil.writeUnsignedIntegerLittleEndian(localEntryStart, 22, file.inputSize);
+			DataUtil.Write32U.LE.write(localEntryStart, 14, file.crc32);
+			DataUtil.Write32U.LE.write(localEntryStart, 18, file.compressedSize);
+			DataUtil.Write32U.LE.write(localEntryStart, 22, file.inputSize);
 			byte[] name = file.pathInZip.getBytes(StandardCharsets.UTF_8);
-			DataUtil.writeUnsignedShortLittleEndian(localEntryStart, 26, name.length);
+			DataUtil.Write16U.LE.write(localEntryStart, 26, name.length);
 			// TODO extra
-			AsyncWork<Integer,IOException> writeEntry = output.writeAsync(ByteBuffer.wrap(localEntryStart));
-			writeEntry.listenInline(new Runnable() {
+			AsyncSupplier<Integer,IOException> writeEntry = output.writeAsync(ByteBuffer.wrap(localEntryStart));
+			writeEntry.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (writeEntry.hasError()) {
 						fatalError(writeEntry.getError());
 						return;
 					}
-					AsyncWork<Integer,IOException> writeName = output.writeAsync(ByteBuffer.wrap(name));
-					writeName.listenInline(new Runnable() {
+					AsyncSupplier<Integer,IOException> writeName = output.writeAsync(ByteBuffer.wrap(name));
+					writeName.onDone(new Runnable() {
 						@Override
 						public void run() {
 							if (writeName.hasError()) {
@@ -851,8 +844,8 @@ public class ZipCreator {
 			if (buffers.hasNext()) {
 				ByteBuffer buffer = buffers.next();
 				if (logger.debug()) logger.debug("Writing compressed data for " + file.pathInZip);
-				AsyncWork<Integer,IOException> write = output.writeAsync(buffer);
-				write.listenInline(new Runnable() {
+				AsyncSupplier<Integer,IOException> write = output.writeAsync(buffer);
+				write.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (write.hasError()) {
@@ -906,8 +899,8 @@ public class ZipCreator {
 			if (logger.debug()) logger.debug("Write memory part of large file: " + file.pathInZip);
 			ByteBuffer buffer = compress.compressedBuffers.removeLast();
 			sizeMemory -= buffer.remaining();
-			AsyncWork<Integer,IOException> write = output.writeAsync(outputStart + sizeTmp + sizeMemory, buffer);
-			write.listenInline(new Runnable() {
+			AsyncSupplier<Integer,IOException> write = output.writeAsync(outputStart + sizeTmp + sizeMemory, buffer);
+			write.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (write.hasError()) {
@@ -918,8 +911,8 @@ public class ZipCreator {
 					if (sizeMemory > 0)
 						writeFromMemory();
 					else {
-						AsyncWork<Long,IOException> seek = output.seekAsync(SeekType.FROM_BEGINNING, outputStart);
-						seek.listenInline(new Runnable() {
+						AsyncSupplier<Long,IOException> seek = output.seekAsync(SeekType.FROM_BEGINNING, outputStart);
+						seek.onDone(new Runnable() {
 							@Override
 							public void run() {
 								if (seek.hasError()) {
@@ -935,9 +928,9 @@ public class ZipCreator {
 		}
 		private byte[] tmpBuffer;
 		private void startWriteFromTmp() {
-			AsyncWork<Long,IOException> seek = compress.tmpIO.seekAsync(SeekType.FROM_BEGINNING, 0);
+			AsyncSupplier<Long,IOException> seek = compress.tmpIO.seekAsync(SeekType.FROM_BEGINNING, 0);
 			tmpBuffer = new byte[sizeTmp < 4*1024*1024 ? (int)sizeTmp : 4*1024*1024];
-			seek.listenInline(new Runnable() {
+			seek.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (seek.hasError()) {
@@ -951,8 +944,8 @@ public class ZipCreator {
 		}
 		private void writeFromTmp() {
 			if (logger.debug()) logger.debug("Reading temp file part of large file: " + file.pathInZip);
-			AsyncWork<Integer,IOException> read = compress.tmpIO.readFullyAsync(ByteBuffer.wrap(tmpBuffer));
-			read.listenInline(new Runnable() {
+			AsyncSupplier<Integer,IOException> read = compress.tmpIO.readFullyAsync(ByteBuffer.wrap(tmpBuffer));
+			read.onDone(new Runnable() {
 				@Override
 				public void run() {
 					if (read.hasError()) {
@@ -961,8 +954,8 @@ public class ZipCreator {
 						return;
 					}
 					if (logger.debug()) logger.debug("Writing temp file part of large file: " + file.pathInZip);
-					AsyncWork<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(tmpBuffer, 0, read.getResult().intValue()));
-					write.listenInline(new Runnable() {
+					AsyncSupplier<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(tmpBuffer, 0, read.getResult().intValue()));
+					write.onDone(new Runnable() {
 						@Override
 						public void run() {
 							if (write.hasError()) {
@@ -975,9 +968,9 @@ public class ZipCreator {
 								writeFromTmp();
 							else {
 								if (logger.debug()) logger.debug("End of write for large file: " + file.pathInZip);
-								AsyncWork<Long,IOException> seek = output.seekAsync(SeekType.FROM_END, 0);
+								AsyncSupplier<Long,IOException> seek = output.seekAsync(SeekType.FROM_END, 0);
 								compress.closeAndCleanTmp();
-								seek.listenInline(new Runnable() {
+								seek.onDone(new Runnable() {
 									@Override
 									public void run() {
 										if (seek.hasError()) {
@@ -1039,24 +1032,24 @@ public class ZipCreator {
 			return;
 		}
 		// TODO date and time
-		DataUtil.writeUnsignedIntegerLittleEndian(centralDirectoryEntry, 16, file.crc32);
-		DataUtil.writeUnsignedIntegerLittleEndian(centralDirectoryEntry, 20, file.compressedSize);
-		DataUtil.writeUnsignedIntegerLittleEndian(centralDirectoryEntry, 24, file.inputSize);
+		DataUtil.Write32U.LE.write(centralDirectoryEntry, 16, file.crc32);
+		DataUtil.Write32U.LE.write(centralDirectoryEntry, 20, file.compressedSize);
+		DataUtil.Write32U.LE.write(centralDirectoryEntry, 24, file.inputSize);
 		byte[] name = file.pathInZip.getBytes(StandardCharsets.UTF_8);
-		DataUtil.writeUnsignedShortLittleEndian(centralDirectoryEntry, 28, name.length);
-		DataUtil.writeUnsignedIntegerLittleEndian(centralDirectoryEntry, 42, file.localHeaderOffset);
+		DataUtil.Write16U.LE.write(centralDirectoryEntry, 28, name.length);
+		DataUtil.Write32U.LE.write(centralDirectoryEntry, 42, file.localHeaderOffset);
 		if (logger.debug()) logger.debug("Write central directory entry for " + file.pathInZip);
-		AsyncWork<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(centralDirectoryEntry));
+		AsyncSupplier<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(centralDirectoryEntry));
 		int index = fileIndex;
-		write.listenInline(new Runnable() {
+		write.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (write.hasError()) {
 					fatalError(write.getError());
 					return;
 				}
-				AsyncWork<Integer,IOException> writeName = output.writeAsync(ByteBuffer.wrap(name));
-				writeName.listenInline(new Runnable() {
+				AsyncSupplier<Integer,IOException> writeName = output.writeAsync(ByteBuffer.wrap(name));
+				writeName.onDone(new Runnable() {
 					@Override
 					public void run() {
 						if (writeName.hasError()) {
@@ -1079,21 +1072,21 @@ public class ZipCreator {
 		end[5] = 0;
 		end[6] = 0;
 		end[7] = 0;
-		DataUtil.writeUnsignedShortLittleEndian(end, 8, filesOk);
-		DataUtil.writeUnsignedShortLittleEndian(end, 10, filesOk);
+		DataUtil.Write16U.LE.write(end, 8, filesOk);
+		DataUtil.Write16U.LE.write(end, 10, filesOk);
 		long pos;
 		try { pos = output.getPosition(); }
 		catch (IOException e) {
 			fatalError(e);
 			return;
 		}
-		DataUtil.writeUnsignedIntegerLittleEndian(end, 12, pos - centralDirectoryPos);
-		DataUtil.writeUnsignedIntegerLittleEndian(end, 16, centralDirectoryPos);
+		DataUtil.Write32U.LE.write(end, 12, pos - centralDirectoryPos);
+		DataUtil.Write32U.LE.write(end, 16, centralDirectoryPos);
 		end[20] = 0;
 		end[21] = 0;
 		if (logger.debug()) logger.debug("Write end of central directory at " + pos);
-		AsyncWork<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(end));
-		write.listenInline(new Runnable() {
+		AsyncSupplier<Integer,IOException> write = output.writeAsync(ByteBuffer.wrap(end));
+		write.onDone(new Runnable() {
 			@Override
 			public void run() {
 				if (write.hasError()) {

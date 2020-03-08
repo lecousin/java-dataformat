@@ -25,10 +25,10 @@ public class MZDetector implements DataFormatDetector.OnlyHeaderNeeded {
 	public DataFormat finishDetection(Data data, byte[] header, int headerLength, long dataSize) {
 		if (headerLength < 0x1C)
 			return null;
-		int lastBlockSize = DataUtil.readUnsignedShortLittleEndian(header, 0x02);
+		int lastBlockSize = DataUtil.Read16U.LE.read(header, 0x02);
 		if (lastBlockSize > 511)
 			return null;
-		int nbBlocks = DataUtil.readUnsignedShortLittleEndian(header, 0x04);
+		int nbBlocks = DataUtil.Read16U.LE.read(header, 0x04);
 		int dataOffset = nbBlocks*512;
 		if (lastBlockSize != 0)
 			dataOffset = dataOffset-512+lastBlockSize;

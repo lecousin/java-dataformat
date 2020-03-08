@@ -2,7 +2,8 @@ package net.lecousin.dataformat.vm.vbox;
 
 import net.lecousin.dataformat.core.Data;
 import net.lecousin.dataformat.core.DataFormat;
-import net.lecousin.framework.concurrent.synch.AsyncWork;
+import net.lecousin.framework.concurrent.async.AsyncSupplier;
+import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.uidescription.resources.IconProvider;
@@ -39,7 +40,7 @@ public class SAVDataFormat implements DataFormat {
 	}
 	
 	@Override
-	public AsyncWork<VDIDataFormatInfo, Exception> getInfo(Data data, byte priority) {
+	public AsyncSupplier<VDIDataFormatInfo, Exception> getInfo(Data data, Priority priority) {
 		return null;
 	}
 

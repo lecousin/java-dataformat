@@ -48,22 +48,22 @@ public class ELFDetector implements DataFormatDetector.OnlyHeaderNeeded {
 		case _32:
 			switch (info.endianness) {
 			case LE:
-				info.programHeaderTableOffset = DataUtil.readUnsignedIntegerLittleEndian(header, 0x1C);
-				info.sectionHeaderTableOffset = DataUtil.readUnsignedIntegerLittleEndian(header, 0x20);
-				info.programHeaderTableEntrySize = DataUtil.readUnsignedShortLittleEndian(header, 0x2A);
-				info.programHeaderTableNbEntries = DataUtil.readUnsignedShortLittleEndian(header, 0x2C);
-				info.sectionHeaderTableEntrySize = DataUtil.readUnsignedShortLittleEndian(header, 0x2E);
-				info.sectionHeaderTableNbEntries = DataUtil.readUnsignedShortLittleEndian(header, 0x30);
-				info.sectionNamesIndex = DataUtil.readUnsignedShortLittleEndian(header, 0x32);
+				info.programHeaderTableOffset = DataUtil.Read32U.LE.read(header, 0x1C);
+				info.sectionHeaderTableOffset = DataUtil.Read32U.LE.read(header, 0x20);
+				info.programHeaderTableEntrySize = DataUtil.Read16U.LE.read(header, 0x2A);
+				info.programHeaderTableNbEntries = DataUtil.Read16U.LE.read(header, 0x2C);
+				info.sectionHeaderTableEntrySize = DataUtil.Read16U.LE.read(header, 0x2E);
+				info.sectionHeaderTableNbEntries = DataUtil.Read16U.LE.read(header, 0x30);
+				info.sectionNamesIndex = DataUtil.Read16U.LE.read(header, 0x32);
 				break;
 			case BE:
-				info.programHeaderTableOffset = DataUtil.readUnsignedIntegerBigEndian(header, 0x1C);
-				info.sectionHeaderTableOffset = DataUtil.readUnsignedIntegerBigEndian(header, 0x20);
-				info.programHeaderTableEntrySize = DataUtil.readUnsignedShortBigEndian(header, 0x2A);
-				info.programHeaderTableNbEntries = DataUtil.readUnsignedShortBigEndian(header, 0x2C);
-				info.sectionHeaderTableEntrySize = DataUtil.readUnsignedShortBigEndian(header, 0x2E);
-				info.sectionHeaderTableNbEntries = DataUtil.readUnsignedShortBigEndian(header, 0x30);
-				info.sectionNamesIndex = DataUtil.readUnsignedShortBigEndian(header, 0x32);
+				info.programHeaderTableOffset = DataUtil.Read32U.BE.read(header, 0x1C);
+				info.sectionHeaderTableOffset = DataUtil.Read32U.BE.read(header, 0x20);
+				info.programHeaderTableEntrySize = DataUtil.Read16U.BE.read(header, 0x2A);
+				info.programHeaderTableNbEntries = DataUtil.Read16U.BE.read(header, 0x2C);
+				info.sectionHeaderTableEntrySize = DataUtil.Read16U.BE.read(header, 0x2E);
+				info.sectionHeaderTableNbEntries = DataUtil.Read16U.BE.read(header, 0x30);
+				info.sectionNamesIndex = DataUtil.Read16U.BE.read(header, 0x32);
 				break;
 			}
 			break;
@@ -71,22 +71,22 @@ public class ELFDetector implements DataFormatDetector.OnlyHeaderNeeded {
 			if (headerLength < 0x40) return null;
 			switch (info.endianness) {
 			case LE:
-				info.programHeaderTableOffset = DataUtil.readLongLittleEndian(header, 0x20);
-				info.sectionHeaderTableOffset = DataUtil.readLongLittleEndian(header, 0x28);
-				info.programHeaderTableEntrySize = DataUtil.readUnsignedShortLittleEndian(header, 0x36);
-				info.programHeaderTableNbEntries = DataUtil.readUnsignedShortLittleEndian(header, 0x38);
-				info.sectionHeaderTableEntrySize = DataUtil.readUnsignedShortLittleEndian(header, 0x3A);
-				info.sectionHeaderTableNbEntries = DataUtil.readUnsignedShortLittleEndian(header, 0x3C);
-				info.sectionNamesIndex = DataUtil.readUnsignedShortLittleEndian(header, 0x3E);
+				info.programHeaderTableOffset = DataUtil.Read64.LE.read(header, 0x20);
+				info.sectionHeaderTableOffset = DataUtil.Read64.LE.read(header, 0x28);
+				info.programHeaderTableEntrySize = DataUtil.Read16U.LE.read(header, 0x36);
+				info.programHeaderTableNbEntries = DataUtil.Read16U.LE.read(header, 0x38);
+				info.sectionHeaderTableEntrySize = DataUtil.Read16U.LE.read(header, 0x3A);
+				info.sectionHeaderTableNbEntries = DataUtil.Read16U.LE.read(header, 0x3C);
+				info.sectionNamesIndex = DataUtil.Read16U.LE.read(header, 0x3E);
 				break;
 			case BE:
-				info.programHeaderTableOffset = DataUtil.readLongBigEndian(header, 0x20);
-				info.sectionHeaderTableOffset = DataUtil.readLongBigEndian(header, 0x28);
-				info.programHeaderTableEntrySize = DataUtil.readUnsignedShortBigEndian(header, 0x36);
-				info.programHeaderTableNbEntries = DataUtil.readUnsignedShortBigEndian(header, 0x38);
-				info.sectionHeaderTableEntrySize = DataUtil.readUnsignedShortBigEndian(header, 0x3A);
-				info.sectionHeaderTableNbEntries = DataUtil.readUnsignedShortBigEndian(header, 0x3C);
-				info.sectionNamesIndex = DataUtil.readUnsignedShortBigEndian(header, 0x3E);
+				info.programHeaderTableOffset = DataUtil.Read64.BE.read(header, 0x20);
+				info.sectionHeaderTableOffset = DataUtil.Read64.BE.read(header, 0x28);
+				info.programHeaderTableEntrySize = DataUtil.Read16U.BE.read(header, 0x36);
+				info.programHeaderTableNbEntries = DataUtil.Read16U.BE.read(header, 0x38);
+				info.sectionHeaderTableEntrySize = DataUtil.Read16U.BE.read(header, 0x3A);
+				info.sectionHeaderTableNbEntries = DataUtil.Read16U.BE.read(header, 0x3C);
+				info.sectionNamesIndex = DataUtil.Read16U.BE.read(header, 0x3E);
 				break;
 			}
 			break;
