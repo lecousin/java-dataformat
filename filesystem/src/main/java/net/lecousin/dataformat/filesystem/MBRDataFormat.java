@@ -22,8 +22,8 @@ import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.WorkProgress;
 import net.lecousin.framework.progress.WorkProgressImpl;
-import net.lecousin.framework.system.hardware.DiskPartition;
-import net.lecousin.framework.system.hardware.DiskPartitionsUtil;
+import net.lecousin.framework.system.hardware.drive.DiskPartition;
+import net.lecousin.framework.system.hardware.drive.DiskPartitionTable;
 import net.lecousin.framework.ui.iconset.hardware.HardwareIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -77,7 +77,7 @@ public class MBRDataFormat implements ContainerDataFormat {
 				}
 			Task.cpu("Read partition table", Priority.NORMAL, t -> {
 				List<DiskPartition> list = new ArrayList<>();
-				if (!DiskPartitionsUtil.readPartitionTable(content, list)) {
+				if (!DiskPartitionTable.readPartitionTable(content, list)) {
 					if (progress != null) progress.progress(work);
 					result.unblockSuccess(null);
 					return null;

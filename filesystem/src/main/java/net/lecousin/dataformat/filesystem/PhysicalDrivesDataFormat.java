@@ -16,11 +16,12 @@ import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.locale.LocalizableString;
 import net.lecousin.framework.progress.FakeWorkProgress;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.system.hardware.DiskPartition;
-import net.lecousin.framework.system.hardware.Drive;
-import net.lecousin.framework.system.hardware.Drives;
-import net.lecousin.framework.system.hardware.Drives.DriveListener;
-import net.lecousin.framework.system.hardware.PhysicalDrive;
+import net.lecousin.framework.system.LCSystem;
+import net.lecousin.framework.system.hardware.drive.DiskPartition;
+import net.lecousin.framework.system.hardware.drive.Drive;
+import net.lecousin.framework.system.hardware.drive.DriveListener;
+import net.lecousin.framework.system.hardware.drive.Drives;
+import net.lecousin.framework.system.hardware.drive.PhysicalDrive;
 import net.lecousin.framework.ui.iconset.hardware.HardwareIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -99,20 +100,21 @@ public class PhysicalDrivesDataFormat implements ContainerDataFormat {
 	
 	@Override
 	public WorkProgress listenSubData(Data container, CollectionListener<Data> listener) {
-		if (Drives.getInstance() == null)
+		Drives hwdrives = LCSystem.get().getHardware().getDrives();
+		if (hwdrives == null)
 			return new FakeWorkProgress();
-		WorkProgress progress = Drives.getInstance().initialize();
-		Drives.getInstance().getDrivesAndListen(new MyListener(container, listener));
+		WorkProgress progress = hwdrives.initialize();
+		hwdrives.getDrivesAndListen(new MyListener(container, listener));
 		return progress;
 	}
 
 	@Override
 	public void unlistenSubData(Data container, CollectionListener<Data> listener) {
-		Drives drives = Drives.getInstance();
-		if (drives != null)
-			for (DriveListener l : drives.getDriveListeners())
+		Drives hwdrives = LCSystem.get().getHardware().getDrives();
+		if (hwdrives != null)
+			for (DriveListener l : hwdrives.getDriveListeners())
 				if ((l instanceof MyListener) && ((MyListener)l).listener == listener) {
-					drives.removeDriveListener(l);
+					hwdrives.removeDriveListener(l);
 					return;
 				}
 	}

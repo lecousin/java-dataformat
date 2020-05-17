@@ -21,10 +21,11 @@ import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.progress.FakeWorkProgress;
 import net.lecousin.framework.progress.WorkProgress;
-import net.lecousin.framework.system.hardware.DiskPartition;
-import net.lecousin.framework.system.hardware.Drive;
-import net.lecousin.framework.system.hardware.Drives;
-import net.lecousin.framework.system.hardware.Drives.DriveListener;
+import net.lecousin.framework.system.LCSystem;
+import net.lecousin.framework.system.hardware.drive.DiskPartition;
+import net.lecousin.framework.system.hardware.drive.Drive;
+import net.lecousin.framework.system.hardware.drive.DriveListener;
+import net.lecousin.framework.system.hardware.drive.Drives;
 import net.lecousin.framework.ui.iconset.hardware.HardwareIconSet;
 import net.lecousin.framework.uidescription.resources.IconProvider;
 
@@ -33,7 +34,8 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 	public static final MountedDrivesDataFormat instance = new MountedDrivesDataFormat();
 	
 	private MountedDrivesDataFormat() {
-		WorkProgress init = Drives.getInstance().initialize();
+		Drives hwdrives = LCSystem.get().getHardware().getDrives();
+		WorkProgress init = hwdrives.initialize();
 		isInit = false;
 		Task.unmanaged("Initialize mounted drives", Priority.NORMAL, t -> {
 			if (isInit) return null;
@@ -101,7 +103,7 @@ public class MountedDrivesDataFormat implements ContainerDataFormat {
 			synchronized (partitions) {
 				isInit = true;
 			}
-			Drives.getInstance().getDrivesAndListen(dl);
+			hwdrives.getDrivesAndListen(dl);
 			List<File> removed = new LinkedList<>();
 			synchronized (partitions) {
 				for (Iterator<File> it = partitions.iterator(); it.hasNext(); ) {

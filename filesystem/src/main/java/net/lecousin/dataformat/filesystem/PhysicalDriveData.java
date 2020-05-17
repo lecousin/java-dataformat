@@ -12,9 +12,10 @@ import net.lecousin.framework.io.IO;
 import net.lecousin.framework.locale.FixedLocalizedString;
 import net.lecousin.framework.locale.ILocalizableString;
 import net.lecousin.framework.remotejvm.RemoteJVM;
-import net.lecousin.framework.system.hardware.Drive;
-import net.lecousin.framework.system.hardware.Drives;
-import net.lecousin.framework.system.hardware.PhysicalDrive;
+import net.lecousin.framework.system.LCSystem;
+import net.lecousin.framework.system.hardware.drive.Drive;
+import net.lecousin.framework.system.hardware.drive.Drives;
+import net.lecousin.framework.system.hardware.drive.PhysicalDrive;
 
 public class PhysicalDriveData extends Data {
 
@@ -62,7 +63,7 @@ public class PhysicalDriveData extends Data {
 		AsyncSupplier<IO.Readable, IOException> result = new AsyncSupplier<>();
 		Task.unmanaged("Opening physical drive for reading", priority, t -> {
 			try {
-				result.unblockSuccess(Drives.getInstance().openReadOnly(drive, priority));
+				result.unblockSuccess(LCSystem.get().getHardware().getDrives().openReadOnly(drive, priority));
 			} catch (AccessDeniedException e) {
 				AsyncSupplier<RemoteJVM, Exception> start = RemoteJVM.getElevatedJVM();
 				start.onDone(() -> {
@@ -116,14 +117,15 @@ public class PhysicalDriveData extends Data {
 		
 		public static AsyncSupplier<IO.Readable.Seekable, Exception> openDisk(String diskId) {
 			AsyncSupplier<IO.Readable.Seekable, Exception> result = new AsyncSupplier<>();
-			Drives.getInstance().initialize().getSynch().thenStart(Task.unmanaged("Opening physical drive for reading", Priority.NORMAL, t -> {
-				for (Drive drive : Drives.getInstance().getDrives()) {
+			Drives hwdrives = LCSystem.get().getHardware().getDrives();
+			hwdrives.initialize().getSynch().thenStart(Task.unmanaged("Opening physical drive for reading", Priority.NORMAL, t -> {
+				for (Drive drive : hwdrives.getDrives()) {
 					if (!(drive instanceof PhysicalDrive)) continue;
 					PhysicalDrive d = (PhysicalDrive)drive;
 					if (!diskId.equals(d.getOSId())) continue;
 					try {
 						@SuppressWarnings("resource")
-						IO.Readable.Seekable io = Drives.getInstance().openReadOnly(d, Priority.NORMAL);
+						IO.Readable.Seekable io = hwdrives.openReadOnly(d, Priority.NORMAL);
 						result.unblockSuccess(io);
 					} catch (IOException e) {
 						result.error(e);

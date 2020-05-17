@@ -4,7 +4,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import net.lecousin.dataformat.core.Data;
-import net.lecousin.framework.system.hardware.DiskPartition;
+import net.lecousin.framework.system.hardware.drive.DiskPartition;
 
 public class Partitions {
 

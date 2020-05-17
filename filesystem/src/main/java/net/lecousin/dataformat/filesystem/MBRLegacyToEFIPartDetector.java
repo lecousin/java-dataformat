@@ -13,7 +13,7 @@ import net.lecousin.framework.concurrent.async.AsyncSupplier;
 import net.lecousin.framework.concurrent.threads.Task.Priority;
 import net.lecousin.framework.exception.NoException;
 import net.lecousin.framework.io.IO;
-import net.lecousin.framework.system.hardware.DiskPartition;
+import net.lecousin.framework.system.hardware.drive.DiskPartition;
 
 public class MBRLegacyToEFIPartDetector implements DataFormatSpecializationDetector {
 

@@ -17,7 +17,7 @@
   	<dependency>
   		<groupId>net.lecousin.framework.system</groupId>
   		<artifactId>system-api</artifactId>
-  		<version>0.2.6</version>
+  		<version>0.3.0-SNAPSHOT</version>
   	</dependency>
   	<dependency>
   		<groupId>net.lecousin.framework</groupId>
